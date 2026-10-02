@@ -141,6 +141,8 @@ td.cia {
 }
 
 .vehicle-cell:hover { filter: brightness(.94); }
+.vehicle-cell.read-only-cell { cursor: default; }
+.vehicle-cell.read-only-cell:hover { filter: none; }
 
 /* Compact matrix used by the company-mode fleet overview. */
 .company-vehicle-table { margin: 0 28px 18px; }
@@ -253,7 +255,7 @@ td.cia {
 
 .personnel-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 15px;
 }
 
@@ -282,6 +284,14 @@ td.cia {
 }
 
 .counter strong { min-width: 25px; text-align: center; font-size: 20px; }
+.personnel-updated { margin-top: 12px; color: #78909c; font-size: 12px; }
+.personnel-overview { margin: 22px 28px; background: white; padding: 18px; box-shadow: 0 2px 6px rgba(0,0,0,.1); }
+.personnel-overview .table-container { margin: 0; }
+.personnel-overview table { min-width: 780px; }
+.personnel-inline { display: flex; align-items: center; justify-content: center; gap: 5px; }
+.personnel-inline input { width: 58px; padding: 6px; text-align: center; border: 1px solid #cfd8dc; border-radius: 4px; }
+.personnel-inline button { width: 25px; height: 25px; border: 0; border-radius: 50%; color: white; background: #607d8b; cursor: pointer; font-weight: bold; }
+.personnel-save { padding: 7px 9px; border: 0; border-radius: 4px; cursor: pointer; }
 
 .summary {
   margin: 25px 28px 0;

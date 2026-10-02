@@ -19,6 +19,7 @@ let vehicles = [];
 let companies = [];
 let vehicleTypes = [];
 let historyRows = [];
+let personnelRows = [];
 let selectedVehicle = null;
 let realtime = null;
 let refreshTimer = null;
@@ -148,6 +149,8 @@ async function enterApp() {
   const central = profile.rol !== "COMPANIA";
   byId("modo").value = central ? "central" : "compania";
   byId("modo").disabled = !central;
+  byId("vistaCentral").classList.toggle("hidden", !central);
+  byId("vistaCompania").classList.toggle("hidden", central);
 
   await refresh();
   subscribe();
@@ -161,7 +164,7 @@ async function enterApp() {
 }
 
 async function refresh() {
-  const [c, v, h, t] = await Promise.all([
+  const [c, v, h, t, p] = await Promise.all([
     db
       .from("companias")
       .select("id,codigo,nombre")
@@ -180,10 +183,13 @@ async function refresh() {
       .from("tipos_vehiculo")
       .select("id,nombre")
       .eq("activo", true)
-      .order("nombre")
+      .order("nombre"),
+    db
+      .from("personal_disponible")
+      .select("compania_id,pilotos,bomberos,updated_at,companias(codigo)")
   ]);
 
-  const error = [c, v, h, t].find(x => x.error);
+  const error = [c, v, h, t, p].find(x => x.error);
 
   if (error) {
     message("No se pudieron cargar los datos desde el servidor.", true);
@@ -192,6 +198,7 @@ async function refresh() {
 
   companies = c.data || [];
   vehicleTypes = t.data || [];
+  personnelRows = p.data || [];
   vehicles = v.data || [];
   historyRows = h.data || [];
 
@@ -201,6 +208,7 @@ async function refresh() {
   renderCompany();
   renderSummary();
   renderHistory();
+  renderPersonnel();
 
   byId("connectionText").textContent = "CONECTADO A SUPABASE";
 }
@@ -315,7 +323,14 @@ function renderVehicleMatrix(body, companyRows) {
         cell.className = `vehicle-cell status-${vehicle.estado}`;
         cell.innerHTML = `<div>${esc(vehicle.codigo)}</div><small>${stateName(vehicle.estado)}</small>`;
         cell.title = `${vehicle.tipos_vehiculo?.nombre || ""} · ${vehicle.observacion || "Sin observaciones"}`;
-        cell.onclick = () => openVehicle(vehicle);
+        const canEditVehicle = profile?.rol !== "COMPANIA" ||
+          vehicle.compania_id === profile.compania_id;
+        if (canEditVehicle) {
+          cell.onclick = () => openVehicle(vehicle);
+        } else {
+          cell.classList.add("read-only-cell");
+          cell.title = `${vehicle.tipos_vehiculo?.nombre || ""} · Solo lectura`;
+        }
         row.append(cell);
       }
 
@@ -354,17 +369,13 @@ function renderCompany() {
   const groupCodes = vehicleGroups[group] || [];
   const ownCompany = companies.find(c => c.id === profile?.compania_id);
   byId("nombreCompania").textContent = profile?.rol === "COMPANIA"
-    ? `COMPAÑÍA ${ownCompany?.codigo || ""}`
+    ? `UNIDADES DEL GRUPO · COMPAÑÍA ${ownCompany?.codigo || ""}`
     : (vehicleGroupNames[group] || "GRUPO DE UNIDADES");
 
-  const visibleCompanies = profile?.rol === "COMPANIA"
-    ? companies.filter(c => c.id === profile.compania_id)
-    : companies.filter(c => groupCodes.includes(c.codigo));
+  const visibleCompanies = companies.filter(c => groupCodes.includes(c.codigo));
   visibleCompanies.sort((a, b) => a.codigo.localeCompare(b.codigo, "en"));
 
-  const visibleVehicles = profile?.rol === "COMPANIA"
-    ? vehicles.filter(v => v.compania_id === profile.compania_id)
-    : vehicles.filter(v => groupCodes.includes(v.companias?.codigo));
+  const visibleVehicles = vehicles.filter(v => groupCodes.includes(v.companias?.codigo));
 
   const body = byId("vehiculosCompania");
   const companyRows = visibleCompanies.map(company => ({
@@ -422,6 +433,79 @@ function renderHistory() {
       ${r.observacion ? ` — ${esc(r.observacion)}` : ""}
     </div>
   `).join("") || `<div class="history-item">No hay cambios registrados.</div>`;
+}
+
+function renderPersonnel() {
+  const isCompany = profile?.rol === "COMPANIA";
+  byId("personnelPanel").classList.toggle("hidden", !isCompany);
+  byId("personnelOverview").classList.toggle("hidden", isCompany);
+
+  if (isCompany) {
+    const record = personnelRows.find(row => row.compania_id === profile.compania_id);
+    const counts = record || { pilotos: 0, bomberos: 0 };
+    byId("pilotos").textContent = counts.pilotos;
+    byId("personal").textContent = counts.bomberos;
+    byId("personalActualizado").textContent = asDate(record?.updated_at);
+    return;
+  }
+
+  const selectedCodes = new Set(vehicleGroups[byId("companiaSeleccionada").value] || []);
+  const body = byId("personnelOverviewBody");
+  body.replaceChildren();
+  const canEdit = profile?.rol === "ADMINISTRADOR";
+
+  companies
+    .filter(company => selectedCodes.has(company.codigo))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo, "en"))
+    .forEach(company => {
+      const record = personnelRows.find(row => row.compania_id === company.id);
+      const counts = record || { pilotos: 0, bomberos: 0 };
+      const total = counts.pilotos + counts.bomberos;
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td class="cia">${esc(company.codigo)}</td>
+        <td>${personnelCountCell(company.id, "pilotos", counts.pilotos, canEdit)}</td>
+        <td>${personnelCountCell(company.id, "bomberos", counts.bomberos, canEdit)}</td>
+        <td><strong>${total}</strong></td>
+        <td class="update-cell">${asDate(record?.updated_at)}</td>
+        <td>${canEdit ? `<button class="save personnel-save" data-personnel-save="${company.id}">GUARDAR</button>` : "Solo lectura"}</td>
+      `;
+      body.append(row);
+    });
+}
+
+function personnelCountCell(companyId, field, value, canEdit) {
+  if (!canEdit) return String(value);
+  return `<div class="personnel-inline">
+    <button type="button" data-company="${companyId}" data-field="${field}" data-delta="-1">−</button>
+    <input type="number" min="0" max="999" value="${value}" data-company="${companyId}" data-field="${field}">
+    <button type="button" data-company="${companyId}" data-field="${field}" data-delta="1">+</button>
+  </div>`;
+}
+
+async function changePersonnel(field, delta, companyId = profile?.compania_id) {
+  if (profile?.rol !== "COMPANIA" && profile?.rol !== "ADMINISTRADOR") return;
+  const oldRecord = personnelRows.find(row => row.compania_id === companyId);
+  const counts = {
+    pilotos: oldRecord?.pilotos || 0,
+    bomberos: oldRecord?.bomberos || 0
+  };
+  counts[field] = Math.max(0, Math.min(999, counts[field] + delta));
+  await savePersonnel(companyId, counts);
+}
+
+async function savePersonnel(companyId, counts) {
+  const { error } = await db.rpc("actualizar_personal_disponible", {
+    p_compania_id: companyId,
+    p_pilotos: counts.pilotos,
+    p_bomberos: counts.bomberos
+  });
+  if (error) {
+    message("No se pudo guardar el personal disponible. Revisa tus permisos y conexión.", true);
+    return;
+  }
+  message("Personal disponible actualizado.");
+  await refresh();
 }
 
 function openVehicle(v) {
@@ -614,6 +698,35 @@ byId("companiaSeleccionada").addEventListener("change", () => {
   renderCentral();
   renderCompany();
   renderSummary();
+  renderPersonnel();
+});
+
+byId("personnelGrid").addEventListener("click", event => {
+  const button = event.target.closest("button[data-field]");
+  if (!button) return;
+  changePersonnel(button.dataset.field, Number(button.dataset.delta));
+});
+
+byId("personnelOverviewBody").addEventListener("click", event => {
+  const stepButton = event.target.closest("button[data-company][data-field][data-delta]");
+  if (stepButton) {
+    changePersonnel(
+      stepButton.dataset.field,
+      Number(stepButton.dataset.delta),
+      stepButton.dataset.company
+    );
+    return;
+  }
+
+  const saveButton = event.target.closest("button[data-personnel-save]");
+  if (!saveButton) return;
+  const row = saveButton.closest("tr");
+  const companyId = saveButton.dataset.personnelSave;
+  const counts = {};
+  row.querySelectorAll("input[data-field]").forEach(input => {
+    counts[input.dataset.field] = Math.max(0, Math.min(999, Number(input.value) || 0));
+  });
+  savePersonnel(companyId, counts);
 });
 
 byId("guardarCambio").addEventListener("click", guardarCambio);

@@ -122,28 +122,42 @@
       </table>
     </div>
 
-      <div class="personnel-panel">
+      <div id="personnelPanel" class="personnel-panel hidden">
         <div class="panel-title">PERSONAL DISPONIBLE</div>
-        <div class="personnel-grid">
+        <div id="personnelGrid" class="personnel-grid">
           <div class="personnel-box">
             <span>PILOTOS</span>
             <div class="counter">
+              <button type="button" data-field="pilotos" data-delta="-1" aria-label="Restar piloto">−</button>
               <strong id="pilotos">—</strong>
-            </div>
-          </div>
-          <div class="personnel-box">
-            <span>PARAMÉDICOS</span>
-            <div class="counter">
-              <strong id="paramedicos">—</strong>
+              <button type="button" data-field="pilotos" data-delta="1" aria-label="Sumar piloto">+</button>
             </div>
           </div>
           <div class="personnel-box">
             <span>PERSONAL</span>
             <div class="counter">
+              <button type="button" data-field="bomberos" data-delta="-1" aria-label="Restar bombero">−</button>
               <strong id="personal">—</strong>
+              <button type="button" data-field="bomberos" data-delta="1" aria-label="Sumar bombero">+</button>
             </div>
           </div>
         </div>
+        <div class="personnel-updated">Actualizado: <span id="personalActualizado">—</span></div>
+      </div>
+    </section>
+
+    <section id="personnelOverview" class="personnel-overview hidden">
+      <div class="panel-title">PERSONAL DISPONIBLE POR COMPAÑÍA</div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>COMPAÑÍA</th><th>PILOTOS</th><th>PERSONAL</th>
+              <th>TOTAL</th><th>ACTUALIZACIÓN</th><th>ACCIÓN</th>
+            </tr>
+          </thead>
+          <tbody id="personnelOverviewBody"></tbody>
+        </table>
       </div>
     </section>
 
