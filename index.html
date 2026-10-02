@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Control Operativo - Bomberos Arequipa</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="app">
+  <section id="loginPanel" class="login-panel hidden">
+    <h1>Acceso al sistema</h1><p>Inicia sesión con tu cuenta autorizada.</p>
+    <form id="loginForm"><label for="email">Correo</label><input id="email" type="email" autocomplete="username" required><label for="password">Contraseña</label><input id="password" type="password" autocomplete="current-password" required><button class="save" type="submit">INICIAR SESIÓN</button></form>
+  </section>
+  <div id="application" class="hidden">
+  <header class="topbar">
+    <div>
+      <div class="brand">SISTEMA DE CONTROL OPERATIVO</div>
+      <div class="subtitle">CUERPO GENERAL DE BOMBEROS VOLUNTARIOS DEL PERÚ</div>
+    </div>
+    <div class="connection">
+      <span class="connection-dot"></span>
+      <span id="connectionText">SISTEMA ACTIVO</span>
+      <span id="userInfo"></span><button id="logout" class="logout">SALIR</button>
+    </div>
+  </header>
+  <div id="appMessage" class="app-message" hidden></div>
+
+  <section class="toolbar">
+    <div class="control-group">
+      <label>MODO</label>
+      <select id="modo">
+        <option value="central">CENTRAL DE EMERGENCIAS</option>
+        <option value="compania">COMPAÑÍA</option>
+      </select>
+    </div>
+
+    <div class="control-group" id="grupoCompania">
+      <label>COMPAÑÍA</label>
+      <select id="companiaSeleccionada"><option value="">TODAS LAS COMPAÑÍAS</option></select>
+    </div>
+
+  </section>
+
+  <section class="page-title">
+    <div>
+      <h1 id="tituloPrincipal">ESTADO GENERAL DE VEHÍCULOS</h1>
+      <p>VII Comandancia Departamental Arequipa</p>
+    </div>
+    <div class="clock">
+      <div id="fecha"></div>
+      <div id="hora"></div>
+    </div>
+  </section>
+
+  <section id="vistaCentral">
+    <div class="table-container">
+      <table id="tablaVehiculos">
+        <thead>
+          <tr>
+            <th>CIA</th>
+            <th>VEHÍCULO 1</th>
+            <th>VEHÍCULO 2</th>
+            <th>VEHÍCULO 3</th>
+            <th>VEHÍCULO 4</th>
+            <th>VEHÍCULO 5</th>
+            <th>VEHÍCULO 6</th>
+            <th>VEHÍCULO 7</th>
+            <th>ACTUALIZACIÓN</th>
+          </tr>
+        </thead>
+        <tbody id="tablaCentralBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="vistaCompania" class="hidden">
+    <div class="company-header">
+      <div>
+        <div class="company-title" id="nombreCompania">COMPAÑÍA</div>
+        <div class="company-status">
+          <span class="online-dot"></span>
+          COMPUTADORA DE COMPAÑÍA CONECTADA
+        </div>
+      </div>
+      <div class="last-update">
+        Última actualización
+        <strong id="ultimaActualizacion">--:--:--</strong>
+      </div>
+    </div>
+
+    <div id="vehiculosCompania" class="vehicle-grid"></div>
+
+    <div class="personnel-panel">
+      <div class="panel-title">PERSONAL DISPONIBLE</div>
+      <div class="personnel-grid">
+        <div class="personnel-box">
+          <span>PILOTOS</span>
+          <div class="counter">
+          <strong id="pilotos">—</strong>
+          </div>
+        </div>
+        <div class="personnel-box">
+          <span>PARAMÉDICOS</span>
+          <div class="counter">
+          <strong id="paramedicos">—</strong>
+          </div>
+        </div>
+        <div class="personnel-box">
+          <span>PERSONAL</span>
+          <div class="counter">
+          <strong id="personal">—</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="summary">
+    <div class="summary-title">RESUMEN OPERATIVO</div>
+    <div class="summary-grid">
+      <div class="summary-card">
+        <span>TOTAL VEHÍCULOS</span><strong id="totalVehiculos">0</strong>
+      </div>
+      <div class="summary-card available">
+        <span>DISPONIBLES</span><strong id="totalDisponibles">0</strong>
+      </div>
+      <div class="summary-card emergency">
+        <span>EN EMERGENCIA</span><strong id="totalEmergencia">0</strong>
+      </div>
+      <div class="summary-card out">
+        <span>FUERA DE SERVICIO</span><strong id="totalFuera">0</strong>
+      </div>
+      <div class="summary-card reserve">
+        <span>RESERVA</span><strong id="totalReserva">0</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="legend">
+    <span><i class="legend-dot available-dot"></i> DISPONIBLE</span>
+    <span><i class="legend-dot emergency-dot"></i> EN EMERGENCIA</span>
+    <span><i class="legend-dot out-dot"></i> FUERA DE SERVICIO</span>
+    <span><i class="legend-dot reserve-dot"></i> RESERVA</span>
+  </section>
+
+  <section class="history">
+    <div class="history-header">
+      <span>ÚLTIMOS CAMBIOS</span>
+      <span>REGISTRO CENTRAL</span>
+    </div>
+    <div id="historial"></div>
+  </section>
+</div>
+</div>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-title">CAMBIAR ESTADO</div>
+    <div id="modalVehiculo" class="modal-vehicle">VEHÍCULO</div>
+
+    <label>Nuevo estado</label>
+    <select id="nuevoEstado">
+      <option value="disponible">🟢 DISPONIBLE</option>
+      <option value="emergencia">🔴 EN EMERGENCIA</option>
+      <option value="fuera">⚫ FUERA DE SERVICIO</option>
+      <option value="reserva">🟡 RESERVA</option>
+    </select>
+
+    <label>Observación</label>
+    <textarea id="observacion" placeholder="Ejemplo: mantenimiento, incendio, traslado, etc."></textarea>
+
+    <div class="modal-buttons">
+      <button id="cancelarCambio" class="cancel" type="button">CANCELAR</button>
+      <button id="guardarCambio" class="save" type="button">GUARDAR CAMBIO</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
