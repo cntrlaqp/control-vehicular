@@ -86,6 +86,19 @@
         </div>
         <button id="createUserSubmit" class="save" type="submit">CREAR CUENTA</button>
       </form>
+      <div class="managed-users-heading">
+        <div class="panel-title">CUENTAS REGISTRADAS</div>
+        <button id="reloadUsers" class="user-refresh" type="button">ACTUALIZAR LISTA</button>
+      </div>
+      <p class="user-delete-warning">Eliminar una cuenta borra también las entradas de historial y auditoría asociadas a esa persona. Esta acción no se puede deshacer.</p>
+      <div class="table-container user-table-container">
+        <table class="user-table">
+          <thead>
+            <tr><th>NOMBRE</th><th>CORREO</th><th>ROL</th><th>COMPAÑÍA</th><th>ACCIÓN</th></tr>
+          </thead>
+          <tbody id="managedUsersBody"></tbody>
+        </table>
+      </div>
     </section>
 
     <section class="page-title">
