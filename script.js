@@ -23,6 +23,7 @@ let personnelRows = [];
 let selectedVehicle = null;
 let realtime = null;
 let refreshTimer = null;
+let userManagementAccessCode = "";
 const vehicleGroups = {
   ciudad: ["B-19", "B-77", "B-78", "B-140", "B-186", "B-187", "B-213", "B-233", "B-241", "B-YURA"],
   provincias: ["B-12", "B-35", "B-144", "B-205", "B-209"]
@@ -86,6 +87,7 @@ async function boot() {
       enterApp();
     } else if (event === "SIGNED_OUT") {
       profile = null;
+      userManagementAccessCode = "";
       byId("application").classList.add("hidden");
       byId("loginPanel").classList.remove("hidden");
     }
@@ -273,6 +275,7 @@ async function createUser(event) {
     email: byId("newUserEmail").value.trim(),
     password: byId("newUserPassword").value,
     rol: byId("newUserRole").value,
+    access_code: userManagementAccessCode,
     compania_id: byId("newUserRole").value === "COMPANIA"
       ? byId("newUserCompany").value
       : null
@@ -756,9 +759,46 @@ byId("logout").addEventListener("click", logout);
 byId("manageUsersButton").addEventListener("click", () => {
   const panel = byId("userManagement");
   const opening = panel.classList.contains("hidden");
-  panel.classList.toggle("hidden", !opening);
-  byId("manageUsersButton").setAttribute("aria-expanded", String(opening));
-  if (opening) byId("newUserName").focus();
+  if (!opening) {
+    panel.classList.add("hidden");
+    userManagementAccessCode = "";
+    byId("manageUsersButton").setAttribute("aria-expanded", "false");
+    return;
+  }
+
+  if (profile?.rol !== "ADMINISTRADOR") {
+    message("Solo el administrador puede abrir esta opción.", true);
+    return;
+  }
+
+  const enteredCode = window.prompt("Ingresa la clave privada para gestionar usuarios:");
+  if (enteredCode === null || !enteredCode.trim()) return;
+
+  const button = byId("manageUsersButton");
+  button.disabled = true;
+  db.functions.invoke("admin-crear-usuario", {
+    body: { action: "verify", access_code: enteredCode }
+  }).then(async ({ data, error }) => {
+    if (error) {
+      let detail = error.message || "No se pudo validar la clave.";
+      try {
+        const response = await error.context?.json();
+        if (response?.error) detail = response.error;
+      } catch { /* Conserva el mensaje estándar. */ }
+      throw new Error(detail);
+    }
+    if (data?.error) throw new Error(data.error);
+    userManagementAccessCode = enteredCode;
+    panel.classList.remove("hidden");
+    button.setAttribute("aria-expanded", "true");
+    message("Acceso autorizado. Al cerrar el panel, tendrás que ingresar la clave otra vez.");
+    byId("newUserName").focus();
+  }).catch(error => {
+    userManagementAccessCode = "";
+    message(error.message || "Clave incorrecta o función no configurada.", true);
+  }).finally(() => {
+    button.disabled = false;
+  });
 });
 byId("newUserRole").addEventListener("change", updateNewUserRoleFields);
 byId("createUserForm").addEventListener("submit", createUser);
