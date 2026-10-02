@@ -306,26 +306,55 @@ function renderCompany() {
     ? `COMPAÑÍA ${ownCompany?.codigo || ""}`
     : (vehicleGroupNames[group] || "GRUPO DE UNIDADES");
 
-  const mine = profile?.rol === "COMPANIA"
+  const visibleCompanies = profile?.rol === "COMPANIA"
+    ? companies.filter(c => c.id === profile.compania_id)
+    : companies.filter(c => groupCodes.includes(c.codigo));
+  visibleCompanies.sort((a, b) => a.codigo.localeCompare(b.codigo, "en"));
+
+  const visibleVehicles = profile?.rol === "COMPANIA"
     ? vehicles.filter(v => v.compania_id === profile.compania_id)
     : vehicles.filter(v => groupCodes.includes(v.companias?.codigo));
 
-  byId("vehiculosCompania").innerHTML = mine.map(v => `
-    <article class="vehicle-card">
-      <div class="vehicle-name">${esc(v.codigo)}</div>
-      <div class="vehicle-type">${esc(v.tipos_vehiculo?.nombre || "")}</div>
-      <div class="vehicle-status status-${v.estado}">${stateName(v.estado)}</div>
-      <div class="vehicle-observation">
-        ${esc(v.observacion || "Sin observaciones")}<br>
-        <small>${asDate(v.updated_at)}</small>
-      </div>
-      <button class="change-button" data-id="${v.id}">ACTUALIZAR</button>
-    </article>
-  `).join("");
+  const body = byId("vehiculosCompania");
+  body.replaceChildren();
 
-  document.querySelectorAll(".change-button[data-id]").forEach(b => {
-    b.onclick = () => openVehicle(mine.find(v => v.id === b.dataset.id));
+  visibleCompanies.forEach(company => {
+    const companyVehicles = visibleVehicles
+      .filter(v => v.compania_id === company.id)
+      .sort((a, b) => a.codigo.localeCompare(b.codigo, "en"));
+    const row = document.createElement("tr");
+    const companyCell = document.createElement("td");
+    companyCell.className = "cia";
+    companyCell.textContent = company.codigo;
+    row.append(companyCell);
+
+    for (let i = 0; i < 7; i++) {
+      const cell = document.createElement("td");
+      const vehicle = companyVehicles[i];
+      if (vehicle) {
+        cell.className = `vehicle-cell status-${vehicle.estado}`;
+        cell.innerHTML = `<div>${esc(vehicle.codigo)}</div><small>${stateName(vehicle.estado)}</small>`;
+        cell.title = `${vehicle.tipos_vehiculo?.nombre || ""} · ${vehicle.observacion || "Sin observaciones"}`;
+        cell.onclick = () => openVehicle(vehicle);
+      }
+      row.append(cell);
+    }
+
+    const updateCell = document.createElement("td");
+    updateCell.className = "update-cell";
+    updateCell.textContent = companyVehicles.length
+      ? asDate(companyVehicles.reduce((latest, v) =>
+          new Date(v.updated_at) > new Date(latest.updated_at) ? v : latest
+        ).updated_at)
+      : "—";
+    row.append(updateCell);
+    body.append(row);
   });
+
+  const latestUpdate = visibleVehicles.reduce((latest, v) =>
+    !latest || new Date(v.updated_at) > new Date(latest) ? v.updated_at : latest,
+  null);
+  byId("ultimaActualizacion").textContent = asDate(latestUpdate);
 }
 
 function renderSummary() {

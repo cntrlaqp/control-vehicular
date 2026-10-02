@@ -142,6 +142,24 @@ td.cia {
 
 .vehicle-cell:hover { filter: brightness(.94); }
 
+/* Compact matrix used by the company-mode fleet overview. */
+.company-vehicle-table { margin: 0 28px 18px; }
+.company-vehicle-table table { min-width: 850px; table-layout: fixed; }
+.company-vehicle-table th:first-child,
+.company-vehicle-table td.cia { width: 76px; }
+.company-vehicle-table th:last-child,
+.company-vehicle-table td.update-cell { width: 125px; }
+.company-vehicle-table td { height: 46px; }
+.company-vehicle-table .vehicle-cell {
+  min-width: 0;
+  padding: 4px 3px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.company-vehicle-table .vehicle-cell small {
+  font-size: 10px;
+}
+
 .status-disponible { background: #dcedc8; color: #33691e; }
 .status-emergencia { background: #ef5350; color: white; }
 .status-fuera { background: #455a64; color: white; }
