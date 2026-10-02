@@ -17,6 +17,7 @@ const labels = {
 let profile = null;
 let vehicles = [];
 let companies = [];
+let vehicleTypes = [];
 let historyRows = [];
 let selectedVehicle = null;
 let realtime = null;
@@ -133,6 +134,7 @@ async function enterApp() {
   }
 
   profile = p.data;
+  byId("addVehicle").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
   byId("userInfo").textContent =
     `${profile.nombre} · ${profile.rol}` +
     `${profile.companias ? ` · ${profile.companias.codigo}` : ""}`;
@@ -153,7 +155,7 @@ async function enterApp() {
 }
 
 async function refresh() {
-  const [c, v, h] = await Promise.all([
+  const [c, v, h, t] = await Promise.all([
     db
       .from("companias")
       .select("id,codigo,nombre")
@@ -167,10 +169,15 @@ async function refresh() {
         "id,created_at,estado_anterior,estado_nuevo,observacion,vehiculos(codigo,companias(codigo)),perfiles(nombre)"
       )
       .order("created_at", { ascending: false })
-      .limit(30)
+      .limit(30),
+    db
+      .from("tipos_vehiculo")
+      .select("id,nombre")
+      .eq("activo", true)
+      .order("nombre")
   ]);
 
-  const error = [c, v, h].find(x => x.error);
+  const error = [c, v, h, t].find(x => x.error);
 
   if (error) {
     message("No se pudieron cargar los datos desde el servidor.", true);
@@ -178,16 +185,40 @@ async function refresh() {
   }
 
   companies = c.data || [];
+  vehicleTypes = t.data || [];
   vehicles = v.data || [];
   historyRows = h.data || [];
 
   renderCompanies();
+  renderAdminDropdowns();
   renderCentral();
   renderCompany();
   renderSummary();
   renderHistory();
 
   byId("connectionText").textContent = "CONECTADO A SUPABASE";
+}
+
+function renderAdminDropdowns() {
+  const companySelect = byId("adminVehicleCompany");
+  const typeSelect = byId("adminVehicleType");
+  if (!companySelect || !typeSelect) return;
+
+  companySelect.replaceChildren();
+  companies.forEach(company => {
+    const option = document.createElement("option");
+    option.value = company.id;
+    option.textContent = `${company.codigo} · ${company.nombre}`;
+    companySelect.append(option);
+  });
+
+  typeSelect.replaceChildren();
+  vehicleTypes.forEach(type => {
+    const option = document.createElement("option");
+    option.value = type.id;
+    option.textContent = type.nombre;
+    typeSelect.append(option);
+  });
 }
 
 async function loadVehiclesForRole() {
@@ -250,52 +281,74 @@ function filtered() {
   );
 }
 
-function renderCentral() {
-  const list = filtered();
-  const tbody = byId("tablaCentralBody");
+function emptyVehicleCell(companyId) {
+  const cell = document.createElement("td");
+  if (profile?.rol === "ADMINISTRADOR") {
+    cell.className = "empty-vehicle-slot";
+    cell.title = "Agregar un vehículo a esta compañía";
+    cell.textContent = "+ Agregar";
+    cell.onclick = () => openNewVehicle(companyId);
+  }
+  return cell;
+}
 
-  if (!tbody) return;
-  tbody.replaceChildren();
+function renderVehicleMatrix(body, companyRows) {
+  body.replaceChildren();
 
-  const grouped = new Map();
+  companyRows.forEach(({ company, vehicles: companyVehicles }) => {
+    companyVehicles.sort((a, b) => a.codigo.localeCompare(b.codigo, "en"));
+    const rowCount = Math.max(1, Math.ceil(companyVehicles.length / 7));
 
-  list.forEach(v => {
-    const key = v.companias?.codigo || "—";
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key).push(v);
-  });
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+      const row = document.createElement("tr");
+      const companyCell = document.createElement("td");
+      companyCell.className = "cia";
+      companyCell.textContent = rowIndex === 0 ? company.codigo : "";
+      row.append(companyCell);
 
-  grouped.forEach((rows, code) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="cia">${esc(code)}</td>`;
+      for (let slot = 0; slot < 7; slot++) {
+        const vehicle = companyVehicles[rowIndex * 7 + slot];
+        if (!vehicle) {
+          row.append(emptyVehicleCell(company.id));
+          continue;
+        }
 
-    rows.forEach(v => {
-      const td = document.createElement("td");
-      td.className = `vehicle-cell status-${v.estado}`;
-      td.innerHTML =
-        `<div>${esc(v.codigo)}</div><small>${stateName(v.estado)}</small>`;
-      td.title =
-        `${v.tipos_vehiculo?.nombre || ""} · ` +
-        `${v.observacion || "Sin observaciones"}`;
-      td.onclick = () => openVehicle(v);
-      tr.append(td);
-    });
+        const cell = document.createElement("td");
+        cell.className = `vehicle-cell status-${vehicle.estado}`;
+        cell.innerHTML = `<div>${esc(vehicle.codigo)}</div><small>${stateName(vehicle.estado)}</small>`;
+        cell.title = `${vehicle.tipos_vehiculo?.nombre || ""} · ${vehicle.observacion || "Sin observaciones"}`;
+        cell.onclick = () => openVehicle(vehicle);
+        row.append(cell);
+      }
 
-    for (let i = rows.length; i < 7; i++) {
-      tr.insertCell();
+      const updateCell = document.createElement("td");
+      updateCell.className = "update-cell";
+      const mostRecent = companyVehicles.reduce((latest, vehicle) =>
+        !latest || new Date(vehicle.updated_at) > new Date(latest.updated_at)
+          ? vehicle
+          : latest,
+      null);
+      updateCell.textContent = rowIndex === 0 && mostRecent
+        ? asDate(mostRecent.updated_at)
+        : "—";
+      row.append(updateCell);
+      body.append(row);
     }
-
-    const last = document.createElement("td");
-    last.className = "update-cell";
-    last.textContent = asDate(
-      rows.reduce((a, b) =>
-        new Date(a.updated_at) > new Date(b.updated_at) ? a : b
-      ).updated_at
-    );
-
-    tr.append(last);
-    tbody.append(tr);
   });
+}
+
+function renderCentral() {
+  const codes = new Set(vehicleGroups[byId("companiaSeleccionada").value] || []);
+  const list = filtered();
+  const companyRows = companies
+    .filter(company => codes.has(company.codigo))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo, "en"))
+    .map(company => ({
+      company,
+      vehicles: list.filter(vehicle => vehicle.compania_id === company.id)
+    }));
+
+  renderVehicleMatrix(byId("tablaCentralBody"), companyRows);
 }
 
 function renderCompany() {
@@ -316,40 +369,11 @@ function renderCompany() {
     : vehicles.filter(v => groupCodes.includes(v.companias?.codigo));
 
   const body = byId("vehiculosCompania");
-  body.replaceChildren();
-
-  visibleCompanies.forEach(company => {
-    const companyVehicles = visibleVehicles
-      .filter(v => v.compania_id === company.id)
-      .sort((a, b) => a.codigo.localeCompare(b.codigo, "en"));
-    const row = document.createElement("tr");
-    const companyCell = document.createElement("td");
-    companyCell.className = "cia";
-    companyCell.textContent = company.codigo;
-    row.append(companyCell);
-
-    for (let i = 0; i < 7; i++) {
-      const cell = document.createElement("td");
-      const vehicle = companyVehicles[i];
-      if (vehicle) {
-        cell.className = `vehicle-cell status-${vehicle.estado}`;
-        cell.innerHTML = `<div>${esc(vehicle.codigo)}</div><small>${stateName(vehicle.estado)}</small>`;
-        cell.title = `${vehicle.tipos_vehiculo?.nombre || ""} · ${vehicle.observacion || "Sin observaciones"}`;
-        cell.onclick = () => openVehicle(vehicle);
-      }
-      row.append(cell);
-    }
-
-    const updateCell = document.createElement("td");
-    updateCell.className = "update-cell";
-    updateCell.textContent = companyVehicles.length
-      ? asDate(companyVehicles.reduce((latest, v) =>
-          new Date(v.updated_at) > new Date(latest.updated_at) ? v : latest
-        ).updated_at)
-      : "—";
-    row.append(updateCell);
-    body.append(row);
-  });
+  const companyRows = visibleCompanies.map(company => ({
+    company,
+    vehicles: visibleVehicles.filter(v => v.compania_id === company.id)
+  }));
+  renderVehicleMatrix(body, companyRows);
 
   const latestUpdate = visibleVehicles.reduce((latest, v) =>
     !latest || new Date(v.updated_at) > new Date(latest) ? v.updated_at : latest,
@@ -412,11 +436,44 @@ function openVehicle(v) {
   }
 
   selectedVehicle = v;
+  byId("modalTitle").textContent = profile?.rol === "ADMINISTRADOR"
+    ? "EDITAR VEHÍCULO"
+    : "CAMBIAR ESTADO";
   byId("modalVehiculo").textContent =
     `${v.companias?.codigo || ""} — ${v.codigo}`;
+  byId("adminVehicleFields").classList.toggle(
+    "hidden",
+    profile?.rol !== "ADMINISTRADOR"
+  );
+  byId("desactivarVehiculo").classList.toggle(
+    "hidden",
+    profile?.rol !== "ADMINISTRADOR"
+  );
+  if (profile?.rol === "ADMINISTRADOR") {
+    byId("adminVehicleCode").value = v.codigo;
+    byId("adminVehicleCompany").value = v.compania_id;
+    byId("adminVehicleType").value = v.tipo_id;
+  }
   byId("nuevoEstado").value = v.estado;
   byId("observacion").value = v.observacion || "";
   byId("modal").classList.remove("hidden");
+}
+
+function openNewVehicle(companyId = null) {
+  if (profile?.rol !== "ADMINISTRADOR") return;
+  selectedVehicle = null;
+  byId("modalTitle").textContent = "AGREGAR VEHÍCULO";
+  byId("modalVehiculo").textContent = "Nueva unidad";
+  byId("adminVehicleFields").classList.remove("hidden");
+  byId("desactivarVehiculo").classList.add("hidden");
+  byId("adminVehicleCode").value = "";
+  if (companyId) byId("adminVehicleCompany").value = companyId;
+  else if (companies.length) byId("adminVehicleCompany").value = companies[0].id;
+  byId("adminVehicleType").selectedIndex = 0;
+  byId("nuevoEstado").value = "no_reportado";
+  byId("observacion").value = "";
+  byId("modal").classList.remove("hidden");
+  byId("adminVehicleCode").focus();
 }
 
 function cerrarModal() {
@@ -424,28 +481,90 @@ function cerrarModal() {
 }
 
 async function guardarCambio() {
-  if (!selectedVehicle) return;
-
+  const creatingVehicle = !selectedVehicle;
   const estado = byId("nuevoEstado").value;
   const observacion = byId("observacion").value.trim();
-
   byId("guardarCambio").disabled = true;
 
-  const { error } = await db.rpc("actualizar_estado_vehiculo", {
-    p_vehiculo_id: selectedVehicle.id,
-    p_estado: estado,
-    p_observacion: observacion
-  });
+  let vehicleId = selectedVehicle?.id || null;
+  let metadataChanged = false;
 
-  byId("guardarCambio").disabled = false;
+  if (profile?.rol === "ADMINISTRADOR") {
+    const codigo = byId("adminVehicleCode").value.trim();
+    const companiaId = byId("adminVehicleCompany").value;
+    const tipoId = byId("adminVehicleType").value;
+    metadataChanged = !selectedVehicle ||
+      codigo !== selectedVehicle.codigo ||
+      companiaId !== selectedVehicle.compania_id ||
+      tipoId !== selectedVehicle.tipo_id;
 
-  if (error) {
-    message("No se pudo guardar el cambio. Verifica tu conexión y permisos.", true);
-    return;
+    if (metadataChanged) {
+      const { data, error } = await db.rpc("admin_guardar_vehiculo", {
+        p_vehiculo_id: vehicleId,
+        p_codigo: codigo,
+        p_compania_id: companiaId,
+        p_tipo_id: tipoId
+      });
+      if (error) {
+        byId("guardarCambio").disabled = false;
+        message("No se guardaron los datos del vehículo. Revisa el código, la compañía y el tipo.", true);
+        return;
+      }
+      vehicleId = data;
+      if (creatingVehicle) {
+        selectedVehicle = {
+          id: vehicleId,
+          codigo,
+          compania_id: companiaId,
+          tipo_id: tipoId,
+          estado: "no_reportado",
+          observacion: ""
+        };
+      }
+    }
   }
 
+  const statusChanged = estado !== selectedVehicle?.estado ||
+    observacion !== (selectedVehicle.observacion || "");
+
+  if (statusChanged) {
+    const { error } = await db.rpc("actualizar_estado_vehiculo", {
+      p_vehiculo_id: vehicleId,
+      p_estado: estado,
+      p_observacion: observacion
+    });
+
+    if (error) {
+      byId("guardarCambio").disabled = false;
+      message("No se pudo guardar el estado. Verifica tu conexión y permisos.", true);
+      return;
+    }
+  }
+
+  byId("guardarCambio").disabled = false;
   cerrarModal();
-  message("Cambio guardado.");
+  message(creatingVehicle ? "Vehículo agregado." : "Vehículo actualizado.");
+  selectedVehicle = null;
+  await refresh();
+}
+
+async function deactivateVehicle() {
+  if (profile?.rol !== "ADMINISTRADOR" || !selectedVehicle) return;
+  const confirmed = window.confirm(
+    `¿Desactivar ${selectedVehicle.codigo}? Se ocultará de las vistas activas y conservará su historial.`
+  );
+  if (!confirmed) return;
+
+  const { error } = await db.rpc("admin_desactivar_vehiculo", {
+    p_vehiculo_id: selectedVehicle.id
+  });
+  if (error) {
+    message("No se pudo desactivar el vehículo.", true);
+    return;
+  }
+  cerrarModal();
+  selectedVehicle = null;
+  message("Vehículo desactivado; su historial se conserva.");
   await refresh();
 }
 
@@ -501,6 +620,8 @@ byId("companiaSeleccionada").addEventListener("change", () => {
 
 byId("guardarCambio").addEventListener("click", guardarCambio);
 byId("cancelarCambio").addEventListener("click", cerrarModal);
+byId("addVehicle").addEventListener("click", () => openNewVehicle());
+byId("desactivarVehiculo").addEventListener("click", deactivateVehicle);
 
 byId("fecha").textContent = new Date().toLocaleDateString("es-CO", {
   weekday: "long",

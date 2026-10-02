@@ -391,6 +391,8 @@ td.cia {
   background: white;
   width: 430px;
   max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
   border-radius: 8px;
   padding: 22px;
   box-shadow: 0 10px 40px rgba(0,0,0,.3);
@@ -412,6 +414,43 @@ td.cia {
   padding: 11px;
   border: 1px solid #cfd8dc;
   border-radius: 5px;
+}
+
+.modal-box input {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid #cfd8dc;
+  border-radius: 5px;
+}
+
+.admin-vehicle-fields {
+  padding: 12px;
+  margin: 0 0 14px;
+  border: 1px solid #eceff1;
+  border-radius: 6px;
+  background: #f8f9fa;
+}
+
+.empty-vehicle-slot {
+  color: #78909c;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.empty-vehicle-slot:hover {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.danger {
+  padding: 10px 12px;
+  border: none;
+  border-radius: 5px;
+  background: #b71c1c;
+  color: #fff;
+  cursor: pointer;
+  font-weight: bold;
+  margin-right: auto;
 }
 
 .modal-box textarea { height: 90px; resize: vertical; }

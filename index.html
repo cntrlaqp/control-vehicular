@@ -53,6 +53,7 @@
           <option value="provincias">Unidades Vehiculares Provincias</option>
         </select>
       </div>
+      <button id="addVehicle" class="btn-simular hidden" type="button">＋ AGREGAR VEHÍCULO</button>
     </section>
 
     <section class="page-title">
@@ -191,11 +192,21 @@
 
 <div id="modal" class="modal hidden">
   <div class="modal-box">
-    <div class="modal-title">CAMBIAR ESTADO</div>
+    <div id="modalTitle" class="modal-title">CAMBIAR ESTADO</div>
     <div id="modalVehiculo" class="modal-vehicle">VEHÍCULO</div>
+
+    <div id="adminVehicleFields" class="admin-vehicle-fields hidden">
+      <label for="adminVehicleCode">Código del vehículo</label>
+      <input id="adminVehicleCode" maxlength="40" required>
+      <label for="adminVehicleCompany">Compañía</label>
+      <select id="adminVehicleCompany" required></select>
+      <label for="adminVehicleType">Tipo de vehículo</label>
+      <select id="adminVehicleType" required></select>
+    </div>
 
     <label for="nuevoEstado">Nuevo estado</label>
     <select id="nuevoEstado">
+      <option value="no_reportado">⚪ NO REPORTADO</option>
       <option value="disponible">🟢 DISPONIBLE</option>
       <option value="emergencia">🔴 EN EMERGENCIA</option>
       <option value="fuera">⚫ FUERA DE SERVICIO</option>
@@ -206,6 +217,7 @@
     <textarea id="observacion" placeholder="Ejemplo: mantenimiento, incendio, traslado, etc."></textarea>
 
     <div class="modal-buttons">
+      <button id="desactivarVehiculo" class="danger hidden" type="button">DESACTIVAR</button>
       <button id="cancelarCambio" class="cancel" type="button">CANCELAR</button>
       <button id="guardarCambio" class="save" type="button">GUARDAR CAMBIO</button>
     </div>
