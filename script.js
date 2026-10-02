@@ -538,6 +538,96 @@ function renderHistory() {
   `).join("") || `<div class="history-item">No hay cambios registrados.</div>`;
 }
 
+function csvCell(value) {
+  let text = String(value ?? "");
+  // Evita que textos ingresados por usuarios se interpreten como fórmulas en Excel.
+  if (/^[\u0000-\u0020]*[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+async function exportHistoryToExcel() {
+  const button = byId("exportHistoryButton");
+  const fromValue = byId("historyDateFrom").value;
+  const toValue = byId("historyDateTo").value;
+
+  if (fromValue && toValue && fromValue > toValue) {
+    message("La fecha inicial no puede ser posterior a la fecha final.", true);
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "PREPARANDO…";
+  message("");
+
+  try {
+    const pageSize = 500;
+    const rows = [];
+    let offset = 0;
+
+    while (true) {
+      let query = db
+        .from("historial_estados")
+        .select("created_at,estado_anterior,estado_nuevo,observacion,vehiculos(codigo,companias(codigo)),perfiles(nombre)")
+        .order("created_at", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+
+      if (fromValue) {
+        query = query.gte("created_at", new Date(`${fromValue}T00:00:00`).toISOString());
+      }
+      if (toValue) {
+        const exclusiveEnd = new Date(`${toValue}T00:00:00`);
+        exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+        query = query.lt("created_at", exclusiveEnd.toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    if (!rows.length) {
+      message("No hay registros de historial para el período seleccionado.", true);
+      return;
+    }
+
+    const headers = ["Fecha y hora", "Compañía", "Vehículo", "Estado anterior", "Estado nuevo", "Usuario", "Observación"];
+    const csvRows = [headers, ...rows.map(row => [
+      row.created_at ? new Date(row.created_at).toLocaleString("es-PE") : "",
+      row.vehiculos?.companias?.codigo || "",
+      row.vehiculos?.codigo || "",
+      stateName(row.estado_anterior),
+      stateName(row.estado_nuevo),
+      row.perfiles?.nombre || "",
+      row.observacion || ""
+    ])];
+    const csv = "\uFEFF" + csvRows.map(row => row.map(csvCell).join(";")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const period = fromValue && toValue
+      ? `${fromValue}_a_${toValue}`
+      : fromValue
+        ? `desde_${fromValue}`
+        : toValue
+          ? `hasta_${toValue}`
+          : "completo";
+    link.href = url;
+    link.download = `historial_vehicular_${period}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    message(`Exportación lista: ${rows.length} registros. Ábrela con Excel.`);
+  } catch (error) {
+    message(error.message || "No se pudo exportar el historial. Revisa la conexión e inténtalo de nuevo.", true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "EXPORTAR A EXCEL";
+  }
+}
+
 function renderPersonnel() {
   const isCompany = profile?.rol === "COMPANIA";
   byId("personnelPanel").classList.toggle("hidden", !isCompany);
@@ -905,6 +995,8 @@ byId("personnelOverviewBody").addEventListener("click", event => {
   });
   savePersonnel(companyId, counts);
 });
+
+byId("exportHistoryButton").addEventListener("click", exportHistoryToExcel);
 
 byId("guardarCambio").addEventListener("click", guardarCambio);
 byId("cancelarCambio").addEventListener("click", cerrarModal);
