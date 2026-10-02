@@ -271,6 +271,7 @@ async function createUser(event) {
   submit.textContent = "CREANDO…";
 
   const payload = {
+    action: "create",
     nombre: byId("newUserName").value.trim(),
     email: byId("newUserEmail").value.trim(),
     password: byId("newUserPassword").value,
