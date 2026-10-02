@@ -54,6 +54,38 @@
         </select>
       </div>
       <button id="addVehicle" class="btn-simular hidden" type="button">＋ AGREGAR VEHÍCULO</button>
+      <button id="manageUsersButton" class="btn-simular hidden" type="button" aria-expanded="false" aria-controls="userManagement">＋ GESTIONAR USUARIOS</button>
+    </section>
+
+    <section id="userManagement" class="user-management hidden">
+      <div class="panel-title">CREAR CUENTA DE ACCESO</div>
+      <p class="user-management-help">Crea usuarios de Central o de una compañía. La contraseña inicial debes entregarla al usuario por un medio privado.</p>
+      <form id="createUserForm" class="user-form">
+        <div class="user-form-field">
+          <label for="newUserName">Nombre</label>
+          <input id="newUserName" name="nombre" maxlength="100" autocomplete="name" required>
+        </div>
+        <div class="user-form-field">
+          <label for="newUserEmail">Correo</label>
+          <input id="newUserEmail" name="email" type="email" autocomplete="email" required>
+        </div>
+        <div class="user-form-field">
+          <label for="newUserPassword">Contraseña inicial</label>
+          <input id="newUserPassword" name="password" type="password" minlength="8" autocomplete="new-password" required>
+        </div>
+        <div class="user-form-field">
+          <label for="newUserRole">Rol</label>
+          <select id="newUserRole" name="rol" required>
+            <option value="COMPANIA">Compañía</option>
+            <option value="CENTRAL">Central de Emergencias</option>
+          </select>
+        </div>
+        <div id="newUserCompanyField" class="user-form-field">
+          <label for="newUserCompany">Compañía asignada</label>
+          <select id="newUserCompany" name="compania_id" required></select>
+        </div>
+        <button id="createUserSubmit" class="save" type="submit">CREAR CUENTA</button>
+      </form>
     </section>
 
     <section class="page-title">

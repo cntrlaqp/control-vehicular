@@ -136,6 +136,7 @@ async function enterApp() {
 
   profile = p.data;
   byId("addVehicle").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
+  byId("manageUsersButton").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
   if (profile.rol === "COMPANIA") {
     const initialGroup = Object.entries(vehicleGroups).find(([, codes]) =>
       codes.includes(profile.companias?.codigo)
@@ -204,6 +205,7 @@ async function refresh() {
 
   renderCompanies();
   renderAdminDropdowns();
+  renderUserCompanyDropdown();
   renderCentral();
   renderCompany();
   renderSummary();
@@ -233,6 +235,73 @@ function renderAdminDropdowns() {
     option.textContent = type.nombre;
     typeSelect.append(option);
   });
+}
+
+function renderUserCompanyDropdown() {
+  const select = byId("newUserCompany");
+  if (!select) return;
+  const previous = select.value;
+  select.replaceChildren();
+  companies.forEach(company => {
+    const option = document.createElement("option");
+    option.value = company.id;
+    option.textContent = `${company.codigo} · ${company.nombre}`;
+    select.append(option);
+  });
+  if (companies.some(company => company.id === previous)) select.value = previous;
+}
+
+function updateNewUserRoleFields() {
+  const isCompany = byId("newUserRole").value === "COMPANIA";
+  byId("newUserCompanyField").classList.toggle("hidden", !isCompany);
+  byId("newUserCompany").required = isCompany;
+}
+
+async function createUser(event) {
+  event.preventDefault();
+  if (profile?.rol !== "ADMINISTRADOR") {
+    message("Solo un administrador puede crear usuarios.", true);
+    return;
+  }
+
+  const submit = byId("createUserSubmit");
+  submit.disabled = true;
+  submit.textContent = "CREANDO…";
+
+  const payload = {
+    nombre: byId("newUserName").value.trim(),
+    email: byId("newUserEmail").value.trim(),
+    password: byId("newUserPassword").value,
+    rol: byId("newUserRole").value,
+    compania_id: byId("newUserRole").value === "COMPANIA"
+      ? byId("newUserCompany").value
+      : null
+  };
+
+  try {
+    const { data, error } = await db.functions.invoke("admin-crear-usuario", {
+      body: payload
+    });
+
+    if (error) {
+      let detail = error.message || "No se pudo crear la cuenta.";
+      try {
+        const response = await error.context?.json();
+        if (response?.error) detail = response.error;
+      } catch { /* Usa el mensaje estándar si la respuesta no es JSON. */ }
+      throw new Error(detail);
+    }
+    if (data?.error) throw new Error(data.error);
+
+    byId("createUserForm").reset();
+    updateNewUserRoleFields();
+    message("Cuenta creada. Comparte la contraseña inicial con el usuario por un medio privado.");
+  } catch (error) {
+    message(error.message || "No se pudo crear la cuenta. Revisa la conexión e inténtalo de nuevo.", true);
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "CREAR CUENTA";
+  }
 }
 
 async function loadVehiclesForRole() {
@@ -684,6 +753,15 @@ function subscribe() {
 
 byId("loginForm").addEventListener("submit", login);
 byId("logout").addEventListener("click", logout);
+byId("manageUsersButton").addEventListener("click", () => {
+  const panel = byId("userManagement");
+  const opening = panel.classList.contains("hidden");
+  panel.classList.toggle("hidden", !opening);
+  byId("manageUsersButton").setAttribute("aria-expanded", String(opening));
+  if (opening) byId("newUserName").focus();
+});
+byId("newUserRole").addEventListener("change", updateNewUserRoleFields);
+byId("createUserForm").addEventListener("submit", createUser);
 
 byId("modo").addEventListener("change", () => {
   const companyMode = byId("modo").value === "compania";
@@ -733,6 +811,8 @@ byId("guardarCambio").addEventListener("click", guardarCambio);
 byId("cancelarCambio").addEventListener("click", cerrarModal);
 byId("addVehicle").addEventListener("click", () => openNewVehicle());
 byId("desactivarVehiculo").addEventListener("click", deactivateVehicle);
+
+updateNewUserRoleFields();
 
 byId("fecha").textContent = new Date().toLocaleDateString("es-CO", {
   weekday: "long",
