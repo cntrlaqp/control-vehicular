@@ -270,6 +270,20 @@
   </div>
 </div>
 
+<div id="userGateModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="userGateTitle">
+  <form id="userGateForm" class="modal-box">
+    <div id="userGateTitle" class="modal-title">ACCESO RESTRINGIDO</div>
+    <p>Ingresa la clave privada para gestionar usuarios.</p>
+    <label for="userGatePassword">Clave de acceso</label>
+    <input id="userGatePassword" type="password" autocomplete="off" required>
+    <p id="userGateError" class="user-gate-error" role="alert" hidden></p>
+    <div class="modal-buttons">
+      <button id="cancelUserGate" class="cancel" type="button">CANCELAR</button>
+      <button id="verifyUserGate" class="save" type="submit">CONTINUAR</button>
+    </div>
+  </form>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>

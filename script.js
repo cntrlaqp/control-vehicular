@@ -787,6 +787,13 @@ function subscribe() {
 
 byId("loginForm").addEventListener("submit", login);
 byId("logout").addEventListener("click", logout);
+function closeUserGateModal() {
+  byId("userGateModal").classList.add("hidden");
+  byId("userGateForm").reset();
+  byId("userGateError").hidden = true;
+  byId("userGateError").textContent = "";
+}
+
 byId("manageUsersButton").addEventListener("click", () => {
   const panel = byId("userManagement");
   const opening = panel.classList.contains("hidden");
@@ -802,14 +809,30 @@ byId("manageUsersButton").addEventListener("click", () => {
     return;
   }
 
-  const enteredCode = window.prompt("Ingresa la clave privada para gestionar usuarios:");
-  if (enteredCode === null || !enteredCode.trim()) return;
+  byId("userGateError").hidden = true;
+  byId("userGateError").textContent = "";
+  byId("userGateModal").classList.remove("hidden");
+  byId("userGatePassword").focus();
+});
 
-  const button = byId("manageUsersButton");
-  button.disabled = true;
-  db.functions.invoke("admin-crear-usuario", {
-    body: { action: "verify", access_code: enteredCode }
-  }).then(async ({ data, error }) => {
+byId("cancelUserGate").addEventListener("click", closeUserGateModal);
+byId("userGateModal").addEventListener("click", event => {
+  if (event.target === byId("userGateModal")) closeUserGateModal();
+});
+byId("userGateForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const enteredCode = byId("userGatePassword").value;
+  const submit = byId("verifyUserGate");
+  const errorBox = byId("userGateError");
+  if (!enteredCode.trim()) return;
+
+  submit.disabled = true;
+  submit.textContent = "VALIDANDO…";
+  errorBox.hidden = true;
+  try {
+    const { data, error } = await db.functions.invoke("admin-crear-usuario", {
+      body: { action: "verify", access_code: enteredCode }
+    });
     if (error) {
       let detail = error.message || "No se pudo validar la clave.";
       try {
@@ -819,17 +842,22 @@ byId("manageUsersButton").addEventListener("click", () => {
       throw new Error(detail);
     }
     if (data?.error) throw new Error(data.error);
+
     userManagementAccessCode = enteredCode;
-    panel.classList.remove("hidden");
-    button.setAttribute("aria-expanded", "true");
+    closeUserGateModal();
+    byId("userManagement").classList.remove("hidden");
+    byId("manageUsersButton").setAttribute("aria-expanded", "true");
     message("Acceso autorizado. Al cerrar el panel, tendrás que ingresar la clave otra vez.");
     byId("newUserName").focus();
-  }).catch(error => {
+  } catch (error) {
     userManagementAccessCode = "";
-    message(error.message || "Clave incorrecta o función no configurada.", true);
-  }).finally(() => {
-    button.disabled = false;
-  });
+    errorBox.textContent = error.message || "Clave incorrecta o función no configurada.";
+    errorBox.hidden = false;
+    byId("userGatePassword").select();
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "CONTINUAR";
+  }
 });
 byId("newUserRole").addEventListener("change", updateNewUserRoleFields);
 byId("createUserForm").addEventListener("submit", createUser);
