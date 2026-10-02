@@ -20,6 +20,14 @@ let companies = [];
 let historyRows = [];
 let selectedVehicle = null;
 let realtime = null;
+const vehicleGroups = {
+  ciudad: ["B-19", "B-77", "B-78", "B-140", "B-186", "B-187", "B-213", "B-233", "B-241", "B-YURA"],
+  provincias: ["B-12", "B-35", "B-144", "B-205", "B-209"]
+};
+const vehicleGroupNames = {
+  ciudad: "Unidades Vehiculares Arequipa Ciudad",
+  provincias: "Unidades Vehiculares Provincias"
+};
 
 function message(text, error = false) {
   const el = byId("appMessage");
@@ -184,38 +192,25 @@ async function refresh() {
 }
 
 function renderCompanies() {
-  const sel = byId("companiaSeleccionada");
-  const old = sel.value;
-  sel.replaceChildren();
-
-  if (profile?.rol !== "COMPANIA") {
-    const all = document.createElement("option");
-    all.value = "";
-    all.textContent = "TODAS LAS COMPAÑÍAS";
-    sel.append(all);
-  }
-
-  companies.forEach(c => {
-    const o = document.createElement("option");
-    o.value = c.id;
-    o.textContent = `${c.codigo} · ${c.nombre}`;
-    sel.append(o);
-  });
-
+  // Las opciones son grupos fijos definidos en index.html.
+  // Si el usuario de compañía pertenece a un solo grupo, seleccionarlo automáticamente.
   if (profile?.rol === "COMPANIA") {
-    sel.value = profile.compania_id;
-  } else {
-    sel.value = old;
+    const ownCompany = companies.find(c => c.id === profile.compania_id);
+    const group = Object.entries(vehicleGroups).find(([, codes]) =>
+      codes.includes(ownCompany?.codigo)
+    );
+    if (group) byId("companiaSeleccionada").value = group[0];
   }
 }
 
 function filtered() {
-  const company = byId("companiaSeleccionada").value;
+  const group = byId("companiaSeleccionada").value;
   const mode = byId("modo").value;
+  const codes = vehicleGroups[group] || [];
 
   return vehicles.filter(v =>
-    (mode === "central" || v.compania_id === profile?.compania_id) &&
-    (!company || mode !== "central" || v.compania_id === company)
+    codes.includes(v.companias?.codigo) &&
+    (mode === "central" || profile?.rol !== "COMPANIA" || v.compania_id === profile?.compania_id)
   );
 }
 
@@ -268,15 +263,16 @@ function renderCentral() {
 }
 
 function renderCompany() {
-  const cid = profile?.rol === "COMPANIA"
-    ? profile.compania_id
-    : byId("companiaSeleccionada").value;
+  const group = byId("companiaSeleccionada").value;
+  const groupCodes = vehicleGroups[group] || [];
+  const ownCompany = companies.find(c => c.id === profile?.compania_id);
+  byId("nombreCompania").textContent = profile?.rol === "COMPANIA"
+    ? `COMPAÑÍA ${ownCompany?.codigo || ""}`
+    : (vehicleGroupNames[group] || "GRUPO DE UNIDADES");
 
-  const company = companies.find(c => c.id === cid);
-  byId("nombreCompania").textContent =
-    company ? `COMPAÑÍA ${company.codigo}` : "COMPAÑÍA";
-
-  const mine = vehicles.filter(v => v.compania_id === cid);
+  const mine = profile?.rol === "COMPANIA"
+    ? vehicles.filter(v => v.compania_id === profile.compania_id)
+    : vehicles.filter(v => groupCodes.includes(v.companias?.codigo));
 
   byId("vehiculosCompania").innerHTML = mine.map(v => `
     <article class="vehicle-card">
@@ -297,9 +293,7 @@ function renderCompany() {
 }
 
 function renderSummary() {
-  const list = profile?.rol === "COMPANIA"
-    ? vehicles.filter(v => v.compania_id === profile.compania_id)
-    : vehicles;
+  const list = filtered();
 
   const counts = {
     total: list.length,
@@ -431,11 +425,13 @@ byId("modo").addEventListener("change", () => {
   byId("vistaCompania").classList.toggle("hidden", !companyMode);
   renderCentral();
   renderCompany();
+  renderSummary();
 });
 
 byId("companiaSeleccionada").addEventListener("change", () => {
   renderCentral();
   renderCompany();
+  renderSummary();
 });
 
 byId("guardarCambio").addEventListener("click", guardarCambio);
