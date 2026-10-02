@@ -149,6 +149,17 @@ td.cia {
   padding: 10px 12px;
 }
 
+td.cia strong { display: block; }
+.company-presence {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.company-presence.is-online { color: #2e7d32; }
+.company-presence.is-offline { color: #c62828; }
+
 .vehicle-cell {
   cursor: pointer;
   font-weight: bold;

@@ -32,6 +32,7 @@ const vehicleGroupNames = {
   ciudad: "Unidades Vehiculares Arequipa Ciudad",
   provincias: "Unidades Vehiculares Provincias"
 };
+const COMPANY_ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
 function message(text, error = false) {
   const el = byId("appMessage");
@@ -161,6 +162,7 @@ async function enterApp() {
     setInterval(sendHeartbeat, 60000);
     refreshTimer = setInterval(() => {
       if (profile?.rol === "COMPANIA") refresh();
+      else if (profile) refreshCompanyPresence();
     }, 15000);
   }
   sendHeartbeat();
@@ -170,7 +172,7 @@ async function refresh() {
   const [c, v, h, t, p] = await Promise.all([
     db
       .from("companias")
-      .select("id,codigo,nombre")
+      .select("id,codigo,nombre,ultimo_contacto")
       .eq("activo", true)
       .order("codigo"),
     loadVehiclesForRole(),
@@ -382,7 +384,16 @@ function renderVehicleMatrix(body, companyRows) {
       const row = document.createElement("tr");
       const companyCell = document.createElement("td");
       companyCell.className = "cia";
-      companyCell.textContent = rowIndex === 0 ? company.codigo : "";
+      if (rowIndex === 0) {
+        const online = company.ultimo_contacto &&
+          Date.now() - new Date(company.ultimo_contacto).getTime() <= COMPANY_ONLINE_WINDOW_MS;
+        companyCell.innerHTML = `
+          <strong>${esc(company.codigo)}</strong>
+          <small class="company-presence ${online ? "is-online" : "is-offline"}">
+            ${online ? "En línea" : "Desconectado"}
+          </small>
+        `;
+      }
       row.append(companyCell);
 
       for (let slot = 0; slot < 7; slot++) {
@@ -421,6 +432,25 @@ function renderVehicleMatrix(body, companyRows) {
       body.append(row);
     }
   });
+}
+
+async function refreshCompanyPresence() {
+  const { data, error } = await db
+    .from("companias")
+    .select("id,ultimo_contacto")
+    .eq("activo", true);
+
+  if (error || !data) return;
+
+  const contacts = new Map(data.map(company => [company.id, company.ultimo_contacto]));
+  companies = companies.map(company => ({
+    ...company,
+    ultimo_contacto: contacts.has(company.id)
+      ? contacts.get(company.id)
+      : company.ultimo_contacto ?? null
+  }));
+  renderCentral();
+  renderCompany();
 }
 
 function renderCentral() {
