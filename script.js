@@ -20,6 +20,7 @@ let companies = [];
 let historyRows = [];
 let selectedVehicle = null;
 let realtime = null;
+let refreshTimer = null;
 const vehicleGroups = {
   ciudad: ["B-19", "B-77", "B-78", "B-140", "B-186", "B-187", "B-213", "B-233", "B-241", "B-YURA"],
   provincias: ["B-12", "B-35", "B-144", "B-205", "B-209"]
@@ -142,7 +143,12 @@ async function enterApp() {
 
   await refresh();
   subscribe();
-  setInterval(sendHeartbeat, 60000);
+  if (!refreshTimer) {
+    setInterval(sendHeartbeat, 60000);
+    refreshTimer = setInterval(() => {
+      if (profile?.rol === "COMPANIA") refresh();
+    }, 15000);
+  }
   sendHeartbeat();
 }
 
@@ -153,14 +159,7 @@ async function refresh() {
       .select("id,codigo,nombre")
       .eq("activo", true)
       .order("codigo"),
-
-    db
-      .from("vehiculos")
-      .select(
-        "id,codigo,compania_id,tipo_id,estado,observacion,updated_at,companias(codigo,nombre),tipos_vehiculo(nombre)"
-      )
-      .eq("activo", true)
-      .order("codigo"),
+    loadVehiclesForRole(),
 
     db
       .from("historial_estados")
@@ -191,6 +190,45 @@ async function refresh() {
   byId("connectionText").textContent = "CONECTADO A SUPABASE";
 }
 
+async function loadVehiclesForRole() {
+  const select = "id,codigo,compania_id,tipo_id,estado,observacion,updated_at,companias(codigo,nombre),tipos_vehiculo(nombre)";
+
+  if (profile?.rol !== "COMPANIA") {
+    return db
+      .from("vehiculos")
+      .select(select)
+      .eq("activo", true)
+      .order("codigo");
+  }
+
+  // El usuario de compañía recibe el detalle de su flota y solo estados básicos de las demás.
+  const [ownResult, globalResult] = await Promise.all([
+    db.from("vehiculos").select(select).eq("activo", true).order("codigo"),
+    db.rpc("obtener_estado_global_vehiculos")
+  ]);
+
+  if (ownResult.error) return { data: null, error: ownResult.error };
+  if (globalResult.error) return { data: null, error: globalResult.error };
+
+  const ownById = new Map((ownResult.data || []).map(vehicle => [vehicle.id, vehicle]));
+  const combined = (globalResult.data || []).map(row => {
+    const ownVehicle = ownById.get(row.id);
+    return ownVehicle || {
+      id: row.id,
+      codigo: row.codigo,
+      compania_id: row.compania_id,
+      tipo_id: row.tipo_id,
+      estado: row.estado,
+      observacion: "",
+      updated_at: row.updated_at,
+      companias: { codigo: row.codigo_compania, nombre: row.nombre_compania },
+      tipos_vehiculo: { nombre: row.nombre_tipo }
+    };
+  });
+
+  return { data: combined, error: null };
+}
+
 function renderCompanies() {
   // Las opciones son grupos fijos definidos en index.html.
   // Si el usuario de compañía pertenece a un solo grupo, seleccionarlo automáticamente.
@@ -205,12 +243,10 @@ function renderCompanies() {
 
 function filtered() {
   const group = byId("companiaSeleccionada").value;
-  const mode = byId("modo").value;
   const codes = vehicleGroups[group] || [];
 
   return vehicles.filter(v =>
-    codes.includes(v.companias?.codigo) &&
-    (mode === "central" || profile?.rol !== "COMPANIA" || v.compania_id === profile?.compania_id)
+    codes.includes(v.companias?.codigo)
   );
 }
 
