@@ -135,6 +135,12 @@ async function enterApp() {
 
   profile = p.data;
   byId("addVehicle").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
+  if (profile.rol === "COMPANIA") {
+    const initialGroup = Object.entries(vehicleGroups).find(([, codes]) =>
+      codes.includes(profile.companias?.codigo)
+    );
+    if (initialGroup) byId("companiaSeleccionada").value = initialGroup[0];
+  }
   byId("userInfo").textContent =
     `${profile.nombre} · ${profile.rol}` +
     `${profile.companias ? ` · ${profile.companias.codigo}` : ""}`;
@@ -261,15 +267,7 @@ async function loadVehiclesForRole() {
 }
 
 function renderCompanies() {
-  // Las opciones son grupos fijos definidos en index.html.
-  // Si el usuario de compañía pertenece a un solo grupo, seleccionarlo automáticamente.
-  if (profile?.rol === "COMPANIA") {
-    const ownCompany = companies.find(c => c.id === profile.compania_id);
-    const group = Object.entries(vehicleGroups).find(([, codes]) =>
-      codes.includes(ownCompany?.codigo)
-    );
-    if (group) byId("companiaSeleccionada").value = group[0];
-  }
+  // Las opciones y la selección pertenecen al usuario; el refresh no debe cambiarlas.
 }
 
 function filtered() {
