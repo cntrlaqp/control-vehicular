@@ -300,68 +300,11 @@ async function createUser(event) {
     byId("createUserForm").reset();
     updateNewUserRoleFields();
     message("Cuenta creada. Comparte la contraseña inicial con el usuario por un medio privado.");
-    await loadManagedUsers();
   } catch (error) {
     message(error.message || "No se pudo crear la cuenta. Revisa la conexión e inténtalo de nuevo.", true);
   } finally {
     submit.disabled = false;
     submit.textContent = "CREAR CUENTA";
-  }
-}
-
-async function invokeUserManagement(body) {
-  const { data, error } = await db.functions.invoke("admin-crear-usuario", {
-    body: { ...body, access_code: userManagementAccessCode }
-  });
-  if (error) {
-    let detail = error.message || "No se pudo completar la solicitud.";
-    try {
-      const response = await error.context?.json();
-      if (response?.error) detail = response.error;
-    } catch { /* Conserva el mensaje estándar. */ }
-    throw new Error(detail);
-  }
-  if (data?.error) throw new Error(data.error);
-  return data;
-}
-
-async function loadManagedUsers() {
-  const body = byId("managedUsersBody");
-  if (!body || !userManagementAccessCode) return;
-  body.innerHTML = '<tr><td colspan="5">Cargando cuentas…</td></tr>';
-  try {
-    const data = await invokeUserManagement({ action: "list" });
-    body.innerHTML = (data.users || []).map(user => `
-      <tr>
-        <td>${esc(user.nombre || "—")}</td>
-        <td>${esc(user.email || "—")}</td>
-        <td>${esc(user.rol || "SIN PERFIL")}</td>
-        <td>${esc(user.compania || "—")}</td>
-        <td>${user.can_delete
-          ? `<button class="user-delete" type="button" data-delete-user="${esc(user.id)}" data-user-email="${esc(user.email || "esta cuenta")}">ELIMINAR</button>`
-          : "Protegida"}</td>
-      </tr>
-    `).join("") || '<tr><td colspan="5">No hay cuentas.</td></tr>';
-  } catch (error) {
-    body.innerHTML = '<tr><td colspan="5">No se pudo cargar la lista.</td></tr>';
-    message(error.message || "No se pudo cargar la lista de cuentas.", true);
-  }
-}
-
-async function deleteManagedUser(userId, email, button) {
-  const confirmed = window.confirm(
-    `¿Eliminar permanentemente la cuenta ${email}? También se borrarán su historial y sus entradas de auditoría en la aplicación. Esta acción no se puede deshacer.`
-  );
-  if (!confirmed) return;
-
-  button.disabled = true;
-  try {
-    await invokeUserManagement({ action: "delete", target_user_id: userId });
-    message(`Cuenta ${email} eliminada de la aplicación y de Authentication.`);
-    await loadManagedUsers();
-  } catch (error) {
-    message(error.message || "No se pudo eliminar la cuenta.", true);
-    button.disabled = false;
   }
 }
 
@@ -850,7 +793,6 @@ byId("manageUsersButton").addEventListener("click", () => {
     panel.classList.remove("hidden");
     button.setAttribute("aria-expanded", "true");
     message("Acceso autorizado. Al cerrar el panel, tendrás que ingresar la clave otra vez.");
-    await loadManagedUsers();
     byId("newUserName").focus();
   }).catch(error => {
     userManagementAccessCode = "";
@@ -858,12 +800,6 @@ byId("manageUsersButton").addEventListener("click", () => {
   }).finally(() => {
     button.disabled = false;
   });
-});
-byId("reloadUsers").addEventListener("click", loadManagedUsers);
-byId("managedUsersBody").addEventListener("click", event => {
-  const button = event.target.closest("button[data-delete-user]");
-  if (!button) return;
-  deleteManagedUser(button.dataset.deleteUser, button.dataset.userEmail, button);
 });
 byId("newUserRole").addEventListener("change", updateNewUserRoleFields);
 byId("createUserForm").addEventListener("submit", createUser);
