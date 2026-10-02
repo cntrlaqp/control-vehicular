@@ -1,0 +1,112 @@
+// Esta vista solo consulta la funcion publica de lectura.
+// La publishable key puede ir en el navegador; nunca uses una secret/service_role.
+const PUBLIC_SUPABASE_URL = "https://ibezrcybtydxrhaeykcb.supabase.co";
+const PUBLIC_SUPABASE_KEY = "sb_publishable_q6V-l0D3ktDR42MFeOkBcg_NQwX5XzX";
+const publicDb = window.supabase.createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY);
+
+const stateLabels = {
+  disponible: "DISPONIBLE",
+  emergencia: "EN EMERGENCIA",
+  fuera: "FUERA DE SERVICIO",
+  reserva: "EN RESERVA",
+  no_reportado: "NO REPORTADO"
+};
+
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[char]);
+}
+
+function statusLabel(value) {
+  return stateLabels[value] || "NO REPORTADO";
+}
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleString("es-PE") : "—";
+}
+
+function updateSummary(companies) {
+  const vehicles = companies.flatMap(company => company.vehiculos || []);
+  const counts = {
+    countCompanies: companies.length,
+    countVehicles: vehicles.length,
+    countAvailable: vehicles.filter(vehicle => vehicle.estado === "disponible").length,
+    countEmergency: vehicles.filter(vehicle => vehicle.estado === "emergencia").length,
+    countOut: vehicles.filter(vehicle => vehicle.estado === "fuera").length,
+    countReserve: vehicles.filter(vehicle => vehicle.estado === "reserva").length
+  };
+  for (const [id, count] of Object.entries(counts)) {
+    document.getElementById(id).textContent = count;
+  }
+}
+
+function renderTable(companies) {
+  const sortedCompanies = [...companies].sort((a, b) =>
+    String(a.codigo_compania).localeCompare(String(b.codigo_compania), "en")
+  );
+  const maxVehicles = Math.max(1, ...sortedCompanies.map(company => (company.vehiculos || []).length));
+  const head = document.getElementById("publicTableHead");
+  const body = document.getElementById("publicTableBody");
+
+  head.innerHTML = `<tr>
+    <th scope="col">CIA</th>
+    ${Array.from({ length: maxVehicles }, (_, index) => `<th scope="col">VEHÍCULO ${index + 1}</th>`).join("")}
+    <th scope="col">ACTUALIZACIÓN</th>
+  </tr>`;
+
+  body.innerHTML = sortedCompanies.map(company => {
+    const vehicles = company.vehiculos || [];
+    const latest = vehicles.reduce((value, vehicle) => {
+      if (!vehicle.actualizado_en) return value;
+      return !value || new Date(vehicle.actualizado_en) > new Date(value)
+        ? vehicle.actualizado_en
+        : value;
+    }, null);
+    const vehicleCells = Array.from({ length: maxVehicles }, (_, index) => {
+      const vehicle = vehicles[index];
+      if (!vehicle) return `<td class="blank" aria-label="Sin vehículo"></td>`;
+      const state = stateLabels[vehicle.estado] ? vehicle.estado : "no_reportado";
+      const title = vehicle.tipo ? ` title="${escapeHtml(vehicle.tipo)}"` : "";
+      return `<td class="vehicle status-${state}"${title}>
+        <strong>${escapeHtml(vehicle.codigo || "")}</strong>
+        <small>${statusLabel(vehicle.estado)}</small>
+      </td>`;
+    }).join("");
+    return `<tr>
+      <td class="company">${escapeHtml(company.codigo_compania || "")}</td>
+      ${vehicleCells}
+      <td class="updated">${escapeHtml(formatDate(latest))}</td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadPublicStatus() {
+  const button = document.getElementById("refreshPublic");
+  const status = document.getElementById("publicStatus");
+  button.disabled = true;
+  button.textContent = "ACTUALIZANDO…";
+  status.classList.remove("error");
+  status.textContent = "Consultando estado de las compañías…";
+
+  try {
+    const { data, error } = await publicDb.rpc("estado_publico_vehiculos");
+    if (error) throw error;
+    if (!Array.isArray(data)) throw new Error("El endpoint devolvió un formato inesperado.");
+
+    updateSummary(data);
+    renderTable(data);
+    status.textContent = `${data.length} compañías · consulta pública de solo lectura`;
+    document.getElementById("publicUpdated").textContent = `Consultado: ${formatDate(new Date())}`;
+  } catch (error) {
+    status.classList.add("error");
+    status.textContent = `No se pudo cargar la información. ${error.message || "Revisa tu conexión."}`;
+  } finally {
+    button.disabled = false;
+    button.textContent = "ACTUALIZAR";
+  }
+}
+
+document.getElementById("refreshPublic").addEventListener("click", loadPublicStatus);
+loadPublicStatus();
+setInterval(loadPublicStatus, 60000);

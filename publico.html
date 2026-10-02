@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Consulta pública del estado operativo de vehículos de las compañías de Arequipa.">
+  <title>Estado público de vehículos | Arequipa</title>
+  <link rel="stylesheet" href="publico.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <main class="public-page">
+    <header class="public-header">
+      <div>
+        <p class="eyebrow">VII COMANDANCIA DEPARTAMENTAL AREQUIPA</p>
+        <h1>Estado de vehículos</h1>
+        <p class="subtitle">Consulta pública · Solo lectura · No requiere registrarse</p>
+      </div>
+      <button id="refreshPublic" type="button">ACTUALIZAR</button>
+    </header>
+
+    <section class="public-summary" aria-label="Resumen de estados">
+      <div class="summary-item"><span>COMPAÑÍAS</span><strong id="countCompanies">—</strong></div>
+      <div class="summary-item"><span>VEHÍCULOS</span><strong id="countVehicles">—</strong></div>
+      <div class="summary-item available"><span>DISPONIBLES</span><strong id="countAvailable">—</strong></div>
+      <div class="summary-item emergency"><span>EN EMERGENCIA</span><strong id="countEmergency">—</strong></div>
+      <div class="summary-item out"><span>FUERA DE SERVICIO</span><strong id="countOut">—</strong></div>
+      <div class="summary-item reserve"><span>EN RESERVA</span><strong id="countReserve">—</strong></div>
+    </section>
+
+    <div class="public-status-line">
+      <span id="publicStatus" role="status">Cargando datos…</span>
+      <span id="publicUpdated"></span>
+    </div>
+
+    <section class="public-table-wrap" aria-label="Estado de vehículos por compañía">
+      <table>
+        <thead id="publicTableHead"></thead>
+        <tbody id="publicTableBody"></tbody>
+      </table>
+    </section>
+
+    <footer>La información se consulta en vivo desde el sistema operativo.</footer>
+  </main>
+  <script src="publico.js"></script>
+</body>
+</html>
