@@ -16,6 +16,9 @@ const companyOrder = [
   "B-19", "B-77", "B-78", "B-140", "B-186", "B-187", "B-213", "B-233", "B-241", "B-YURA",
   "B-12", "B-35", "B-144", "B-205", "B-209"
 ];
+const PUBLIC_REFRESH_MS = 1000;
+let publicRefreshTimer = null;
+let publicLoadInProgress = false;
 
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>"']/g, char => ({
@@ -75,6 +78,8 @@ function renderTable(companies) {
 }
 
 async function loadPublicStatus() {
+  if (publicLoadInProgress || document.hidden) return;
+  publicLoadInProgress = true;
   try {
     const { data, error } = await publicDb.rpc("estado_publico_vehiculos");
     if (error) throw error;
@@ -86,10 +91,21 @@ async function loadPublicStatus() {
     const body = document.getElementById("publicTableBody");
     head.replaceChildren();
     body.innerHTML = `<tr><td class="table-message error" colspan="9">No se pudo cargar el estado de vehículos. Revisa la conexión e inténtalo nuevamente.</td></tr>`;
+  } finally {
+    publicLoadInProgress = false;
+    if (!document.hidden) {
+      clearTimeout(publicRefreshTimer);
+      publicRefreshTimer = setTimeout(loadPublicStatus, PUBLIC_REFRESH_MS);
+    }
   }
+}
+
+function refreshPublicStatus() {
+  clearTimeout(publicRefreshTimer);
+  if (!document.hidden) loadPublicStatus();
 }
 
 document.getElementById("publicTableBody").innerHTML =
   `<tr><td class="table-message" colspan="9">Cargando estado de vehículos…</td></tr>`;
 loadPublicStatus();
-setInterval(loadPublicStatus, 60000);
+document.addEventListener("visibilitychange", refreshPublicStatus);
