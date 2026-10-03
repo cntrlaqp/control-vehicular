@@ -173,6 +173,7 @@ async function enterApp() {
     byId("application").classList.remove("hidden");
     byId("addVehicle").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
     byId("manageUsersButton").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
+    byId("resetVehiclesButton").classList.toggle("hidden", !["CENTRAL", "ADMINISTRADOR"].includes(profile.rol));
     if (profile.rol === "COMPANIA") {
       const initialGroup = Object.entries(vehicleGroups).find(([, codes]) =>
         codes.includes(profile.companias?.codigo)
@@ -1091,6 +1092,25 @@ byId("exportHistoryButton").addEventListener("click", exportHistoryToExcel);
 byId("guardarCambio").addEventListener("click", guardarCambio);
 byId("cancelarCambio").addEventListener("click", cerrarModal);
 byId("addVehicle").addEventListener("click", () => openNewVehicle());
+byId("resetVehiclesButton").addEventListener("click", async () => {
+  if (!["CENTRAL", "ADMINISTRADOR"].includes(profile?.rol)) return;
+  const warning = "CONFIRME QUE PONDRA TODAS UNIDADES SIN REPORTE DE SERVICIO, SOLICITE 10.26 A TODAS LAS UNIDADES VIA WEB";
+  if (!window.confirm(warning)) return;
+
+  const button = byId("resetVehiclesButton");
+  button.disabled = true;
+  message("Restableciendo el estado de las unidades…");
+  try {
+    const { data: count, error } = await db.rpc("central_resetear_estados_vehiculos");
+    if (error) throw error;
+    await refresh();
+    message(`RESET completado. ${count} vehículos quedaron en NO REPORTADO.`);
+  } catch (error) {
+    message("No se pudo completar el RESET. Verifica que la migración esté aplicada e inténtalo nuevamente.", true);
+  } finally {
+    button.disabled = false;
+  }
+});
 byId("desactivarVehiculo").addEventListener("click", deactivateVehicle);
 
 updateNewUserRoleFields();

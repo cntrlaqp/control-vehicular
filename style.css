@@ -87,6 +87,9 @@ body {
 }
 
 .btn-simular:hover { background: #455a64; }
+.btn-reset { padding: 11px 22px; border: 0; border-radius: 5px; background: #c62828; color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; }
+.btn-reset:hover { background: #a71f1f; }
+.btn-reset:disabled { opacity: .65; cursor: wait; }
 
 .user-management {
   margin: 18px 28px;
