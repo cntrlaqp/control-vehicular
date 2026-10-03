@@ -743,7 +743,6 @@ function renderPersonnel() {
         <td>${personnelCountCell(company.id, "bomberos", counts.bomberos, canEdit)}</td>
         <td><strong>${total}</strong></td>
         <td class="update-cell">${asDate(record?.updated_at)}</td>
-        <td>${canEdit ? `<button class="save personnel-save" data-personnel-save="${company.id}">GUARDAR</button>` : "Solo lectura"}</td>
       `;
       body.append(row);
     });
@@ -1076,10 +1075,13 @@ byId("personnelOverviewBody").addEventListener("click", event => {
     return;
   }
 
-  const saveButton = event.target.closest("button[data-personnel-save]");
-  if (!saveButton) return;
-  const row = saveButton.closest("tr");
-  const companyId = saveButton.dataset.personnelSave;
+});
+
+byId("personnelOverviewBody").addEventListener("change", event => {
+  const changedInput = event.target.closest("input[data-company][data-field]");
+  if (!changedInput || profile?.rol !== "ADMINISTRADOR") return;
+  const row = changedInput.closest("tr");
+  const companyId = changedInput.dataset.company;
   const counts = {};
   row.querySelectorAll("input[data-field]").forEach(input => {
     counts[input.dataset.field] = Math.max(0, Math.min(999, Number(input.value) || 0));
@@ -1104,7 +1106,7 @@ byId("resetVehiclesButton").addEventListener("click", async () => {
     const { data: count, error } = await db.rpc("central_resetear_estados_vehiculos");
     if (error) throw error;
     await refresh();
-    message(`RESET completado. ${count} vehículos quedaron en NO REPORTADO.`);
+    message(`RESET completado: ${count} vehículos en NO REPORTADO y los contadores de Pilotos, Personal y Total en cero.`);
   } catch (error) {
     message("No se pudo completar el RESET. Verifica que la migración esté aplicada e inténtalo nuevamente.", true);
   } finally {
