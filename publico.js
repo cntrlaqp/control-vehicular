@@ -12,6 +12,11 @@ const stateLabels = {
   no_reportado: "NO REPORTADO"
 };
 
+const companyOrder = [
+  "B-19", "B-77", "B-78", "B-140", "B-186", "B-187", "B-213", "B-233", "B-241", "B-YURA",
+  "B-12", "B-35", "B-144", "B-205", "B-209"
+];
+
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>"']/g, char => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -27,9 +32,12 @@ function formatDate(value) {
 }
 
 function renderTable(companies) {
-  const sortedCompanies = [...companies].sort((a, b) =>
-    String(a.codigo_compania).localeCompare(String(b.codigo_compania), "en")
-  );
+  const sortedCompanies = [...companies].sort((a, b) => {
+    const aIndex = companyOrder.indexOf(a.codigo_compania);
+    const bIndex = companyOrder.indexOf(b.codigo_compania);
+    return (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
+      (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex);
+  });
   const maxVehicles = Math.max(1, ...sortedCompanies.map(company => (company.vehiculos || []).length));
   const head = document.getElementById("publicTableHead");
   const body = document.getElementById("publicTableBody");

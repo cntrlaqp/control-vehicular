@@ -34,6 +34,14 @@ const vehicleGroupNames = {
 };
 const COMPANY_ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
+function compareCompaniesByGroupOrder(a, b, group) {
+  const codes = vehicleGroups[group] || [];
+  const aIndex = codes.indexOf(a.codigo);
+  const bIndex = codes.indexOf(b.codigo);
+  return (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
+    (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex);
+}
+
 function message(text, error = false) {
   const el = byId("appMessage");
   if (!el) return;
@@ -458,7 +466,7 @@ function renderCentral() {
   const list = filtered();
   const companyRows = companies
     .filter(company => codes.has(company.codigo))
-    .sort((a, b) => a.codigo.localeCompare(b.codigo, "en"))
+    .sort((a, b) => compareCompaniesByGroupOrder(a, b, byId("companiaSeleccionada").value))
     .map(company => ({
       company,
       vehicles: list.filter(vehicle => vehicle.compania_id === company.id)
@@ -476,7 +484,7 @@ function renderCompany() {
     : (vehicleGroupNames[group] || "GRUPO DE UNIDADES");
 
   const visibleCompanies = companies.filter(c => groupCodes.includes(c.codigo));
-  visibleCompanies.sort((a, b) => a.codigo.localeCompare(b.codigo, "en"));
+  visibleCompanies.sort((a, b) => compareCompaniesByGroupOrder(a, b, group));
 
   const visibleVehicles = vehicles.filter(v => groupCodes.includes(v.companias?.codigo));
 
@@ -649,7 +657,7 @@ function renderPersonnel() {
 
   companies
     .filter(company => selectedCodes.has(company.codigo))
-    .sort((a, b) => a.codigo.localeCompare(b.codigo, "en"))
+    .sort((a, b) => compareCompaniesByGroupOrder(a, b, byId("companiaSeleccionada").value))
     .forEach(company => {
       const record = personnelRows.find(row => row.compania_id === company.id);
       const counts = record || { pilotos: 0, bomberos: 0 };
