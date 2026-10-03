@@ -143,7 +143,7 @@ async function enterApp() {
     }
     if (claimed !== true) {
       await db.auth.signOut({ scope: "local" });
-      message("Esta cuenta ya está activa en otro equipo. Cierra esa sesión y vuelve a intentar. Si el otro equipo perdió conexión, espera hasta 30 segundos.", true);
+      message("Esta cuenta ya está activa en un equipo autorizado", true);
       return;
     }
 

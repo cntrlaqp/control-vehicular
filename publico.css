@@ -2,12 +2,16 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: #eef1f3;
   color: #263238;
   font-family: Arial, Helvetica, sans-serif;
 }
 
 .public-page { width: 100%; padding: 10px; }
+.public-signature { margin-top: auto; padding: 18px 10px; color: #78909c; text-align: center; font-size: 12px; letter-spacing: .3px; }
 .public-table-wrap {
   overflow: auto;
   background: white;
