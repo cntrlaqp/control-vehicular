@@ -26,21 +26,6 @@ function formatDate(value) {
   return value ? new Date(value).toLocaleString("es-PE") : "—";
 }
 
-function updateSummary(companies) {
-  const vehicles = companies.flatMap(company => company.vehiculos || []);
-  const counts = {
-    countCompanies: companies.length,
-    countVehicles: vehicles.length,
-    countAvailable: vehicles.filter(vehicle => vehicle.estado === "disponible").length,
-    countEmergency: vehicles.filter(vehicle => vehicle.estado === "emergencia").length,
-    countOut: vehicles.filter(vehicle => vehicle.estado === "fuera").length,
-    countReserve: vehicles.filter(vehicle => vehicle.estado === "reserva").length
-  };
-  for (const [id, count] of Object.entries(counts)) {
-    document.getElementById(id).textContent = count;
-  }
-}
-
 function renderTable(companies) {
   const sortedCompanies = [...companies].sort((a, b) =>
     String(a.codigo_compania).localeCompare(String(b.codigo_compania), "en")
@@ -82,31 +67,21 @@ function renderTable(companies) {
 }
 
 async function loadPublicStatus() {
-  const button = document.getElementById("refreshPublic");
-  const status = document.getElementById("publicStatus");
-  button.disabled = true;
-  button.textContent = "ACTUALIZANDO…";
-  status.classList.remove("error");
-  status.textContent = "Consultando estado de las compañías…";
-
   try {
     const { data, error } = await publicDb.rpc("estado_publico_vehiculos");
     if (error) throw error;
     if (!Array.isArray(data)) throw new Error("El endpoint devolvió un formato inesperado.");
 
-    updateSummary(data);
     renderTable(data);
-    status.textContent = `${data.length} compañías · consulta pública de solo lectura`;
-    document.getElementById("publicUpdated").textContent = `Consultado: ${formatDate(new Date())}`;
   } catch (error) {
-    status.classList.add("error");
-    status.textContent = `No se pudo cargar la información. ${error.message || "Revisa tu conexión."}`;
-  } finally {
-    button.disabled = false;
-    button.textContent = "ACTUALIZAR";
+    const head = document.getElementById("publicTableHead");
+    const body = document.getElementById("publicTableBody");
+    head.replaceChildren();
+    body.innerHTML = `<tr><td class="table-message error" colspan="9">No se pudo cargar el estado de vehículos. Revisa la conexión e inténtalo nuevamente.</td></tr>`;
   }
 }
 
-document.getElementById("refreshPublic").addEventListener("click", loadPublicStatus);
+document.getElementById("publicTableBody").innerHTML =
+  `<tr><td class="table-message" colspan="9">Cargando estado de vehículos…</td></tr>`;
 loadPublicStatus();
 setInterval(loadPublicStatus, 60000);
