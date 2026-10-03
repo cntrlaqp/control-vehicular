@@ -23,6 +23,8 @@ let personnelRows = [];
 let selectedVehicle = null;
 let realtime = null;
 let refreshTimer = null;
+let presenceLabelTimer = null;
+let heartbeatInProgress = false;
 let userManagementAccessCode = "";
 const vehicleGroups = {
   ciudad: ["B-19", "B-77", "B-78", "B-140", "B-186", "B-187", "B-213", "B-233", "B-241", "B-YURA"],
@@ -32,7 +34,9 @@ const vehicleGroupNames = {
   ciudad: "Unidades Vehiculares Arequipa Ciudad",
   provincias: "Unidades Vehiculares Provincias"
 };
-const COMPANY_ONLINE_WINDOW_MS = 2 * 60 * 1000;
+// La conexión se considera caída si dejan de llegar tres heartbeats consecutivos.
+const COMPANY_ONLINE_WINDOW_MS = 15 * 1000;
+const COMPANY_HEARTBEAT_INTERVAL_MS = 5 * 1000;
 
 function compareCompaniesByGroupOrder(a, b, group) {
   const codes = vehicleGroups[group] || [];
@@ -167,11 +171,14 @@ async function enterApp() {
   await refresh();
   subscribe();
   if (!refreshTimer) {
-    setInterval(sendHeartbeat, 60000);
+    setInterval(sendHeartbeat, COMPANY_HEARTBEAT_INTERVAL_MS);
     refreshTimer = setInterval(() => {
       if (profile?.rol === "COMPANIA") refresh();
       else if (profile) refreshCompanyPresence();
-    }, 15000);
+    }, 10000);
+  }
+  if (!presenceLabelTimer) {
+    presenceLabelTimer = setInterval(updateCompanyPresenceLabels, 1000);
   }
   sendHeartbeat();
 }
@@ -397,7 +404,8 @@ function renderVehicleMatrix(body, companyRows) {
           Date.now() - new Date(company.ultimo_contacto).getTime() <= COMPANY_ONLINE_WINDOW_MS;
         companyCell.innerHTML = `
           <strong>${esc(company.codigo)}</strong>
-          <small class="company-presence ${online ? "is-online" : "is-offline"}">
+          <small class="company-presence ${online ? "is-online" : "is-offline"}"
+            data-company-id="${esc(company.id)}">
             ${online ? "En línea" : "Desconectado"}
           </small>
         `;
@@ -439,6 +447,21 @@ function renderVehicleMatrix(body, companyRows) {
       row.append(updateCell);
       body.append(row);
     }
+  });
+}
+
+function updateCompanyPresenceLabels() {
+  if (!profile || profile.rol === "COMPANIA") return;
+  const now = Date.now();
+  document.querySelectorAll(".company-presence[data-company-id]").forEach(label => {
+    const company = companies.find(item => item.id === label.dataset.companyId);
+    const lastContact = company?.ultimo_contacto
+      ? new Date(company.ultimo_contacto).getTime()
+      : NaN;
+    const online = Number.isFinite(lastContact) && now - lastContact <= COMPANY_ONLINE_WINDOW_MS;
+    label.textContent = online ? "En línea" : "Desconectado";
+    label.classList.toggle("is-online", online);
+    label.classList.toggle("is-offline", !online);
   });
 }
 
@@ -852,8 +875,12 @@ async function deactivateVehicle() {
 }
 
 async function sendHeartbeat() {
-  if (profile?.rol === "COMPANIA") {
+  if (profile?.rol !== "COMPANIA" || heartbeatInProgress) return;
+  heartbeatInProgress = true;
+  try {
     await db.rpc("registrar_contacto");
+  } finally {
+    heartbeatInProgress = false;
   }
 }
 
@@ -876,6 +903,11 @@ function subscribe() {
       "postgres_changes",
       { event: "*", schema: "public", table: "personal_disponible" },
       refresh
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "companias" },
+      refreshCompanyPresence
     )
     .subscribe(status => {
       byId("connectionText").textContent =
