@@ -26,6 +26,9 @@ let refreshTimer = null;
 let presenceLabelTimer = null;
 let heartbeatInProgress = false;
 let userManagementAccessCode = "";
+let enteringApp = false;
+let appSessionRenewTimer = null;
+let appSessionRenewInProgress = false;
 const vehicleGroups = {
   ciudad: ["B-19", "B-77", "B-78", "B-140", "B-186", "B-187", "B-213", "B-233", "B-241", "B-YURA"],
   provincias: ["B-12", "B-35", "B-144", "B-205", "B-209"]
@@ -37,6 +40,7 @@ const vehicleGroupNames = {
 // La conexión se considera caída si dejan de llegar tres heartbeats consecutivos.
 const COMPANY_ONLINE_WINDOW_MS = 15 * 1000;
 const COMPANY_HEARTBEAT_INTERVAL_MS = 5 * 1000;
+const APP_SESSION_RENEW_INTERVAL_MS = 10 * 1000;
 
 function compareCompaniesByGroupOrder(a, b, group) {
   const codes = vehicleGroups[group] || [];
@@ -82,29 +86,23 @@ async function boot() {
     return;
   }
 
-  const { data: { session }, error } = await db.auth.getSession();
-
-  if (error) {
-    message("No se pudo verificar la sesión.", true);
-  }
-
-  if (session) {
-    await enterApp();
-  } else {
-    byId("loginPanel").classList.remove("hidden");
-  }
-
-  // No recargar cuando Supabase informa que todavía no hay una sesión.
+  // Registrar primero el listener para no perder un cambio de sesión durante el arranque.
   db.auth.onAuthStateChange((event, session) => {
     if (session) {
       enterApp();
     } else if (event === "SIGNED_OUT") {
+      stopAppSessionRenewal();
       profile = null;
       userManagementAccessCode = "";
       byId("application").classList.add("hidden");
       byId("loginPanel").classList.remove("hidden");
     }
   });
+
+  const { data: { session }, error } = await db.auth.getSession();
+  if (error) message("No se pudo verificar la sesión.", true);
+  if (session) await enterApp();
+  else byId("loginPanel").classList.remove("hidden");
 }
 
 async function login(ev) {
@@ -125,62 +123,114 @@ async function login(ev) {
 }
 
 async function logout() {
-  await db.auth.signOut();
+  stopAppSessionRenewal();
+  await db.rpc("liberar_sesion_app");
+  await db.auth.signOut({ scope: "local" });
 }
 
 async function enterApp() {
-  byId("loginPanel").classList.add("hidden");
-  byId("application").classList.remove("hidden");
+  if (enteringApp || profile) return;
+  enteringApp = true;
+  byId("application").classList.add("hidden");
+  byId("loginPanel").classList.remove("hidden");
 
-  const { data: { user } } = await db.auth.getUser();
+  try {
+    const { data: claimed, error: claimError } = await db.rpc("tomar_sesion_app");
+    if (claimError) {
+      await db.auth.signOut({ scope: "local" });
+      message("No se pudo validar el acceso de sesión única. Verifica que se haya aplicado la migración de Supabase.", true);
+      return;
+    }
+    if (claimed !== true) {
+      await db.auth.signOut({ scope: "local" });
+      message("Esta cuenta ya está activa en otro equipo. Cierra esa sesión y vuelve a intentar. Si el otro equipo perdió conexión, espera hasta 30 segundos.", true);
+      return;
+    }
 
-  const p = await db
-    .from("perfiles")
-    .select("id,nombre,rol,compania_id,activo,companias(codigo,nombre)")
-    .eq("id", user.id)
-    .single();
+    const { data: { user }, error: userError } = await db.auth.getUser();
+    if (userError || !user) {
+      await db.rpc("liberar_sesion_app");
+      await db.auth.signOut({ scope: "local" });
+      message("No se pudo verificar la cuenta. Inicia sesión nuevamente.", true);
+      return;
+    }
 
-  if (p.error || !p.data?.activo) {
-    message(
-      "La cuenta no tiene un perfil activo. Solicita acceso al administrador.",
-      true
-    );
-    await db.auth.signOut();
-    return;
+    const p = await db
+      .from("perfiles")
+      .select("id,nombre,rol,compania_id,activo,companias(codigo,nombre)")
+      .eq("id", user.id)
+      .single();
+
+    if (p.error || !p.data?.activo) {
+      await db.rpc("liberar_sesion_app");
+      message("La cuenta no tiene un perfil activo. Solicita acceso al administrador.", true);
+      await db.auth.signOut({ scope: "local" });
+      return;
+    }
+
+    profile = p.data;
+    byId("loginPanel").classList.add("hidden");
+    byId("application").classList.remove("hidden");
+    byId("addVehicle").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
+    byId("manageUsersButton").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
+    if (profile.rol === "COMPANIA") {
+      const initialGroup = Object.entries(vehicleGroups).find(([, codes]) =>
+        codes.includes(profile.companias?.codigo)
+      );
+      if (initialGroup) byId("companiaSeleccionada").value = initialGroup[0];
+    }
+    byId("userInfo").textContent =
+      `${profile.nombre} · ${profile.rol}` +
+      `${profile.companias ? ` · ${profile.companias.codigo}` : ""}`;
+
+    const central = profile.rol !== "COMPANIA";
+    byId("modo").value = central ? "central" : "compania";
+    byId("modo").disabled = !central;
+    byId("vistaCentral").classList.toggle("hidden", !central);
+    byId("vistaCompania").classList.toggle("hidden", central);
+
+    await refresh();
+    subscribe();
+    startAppSessionRenewal();
+    if (!refreshTimer) {
+      setInterval(sendHeartbeat, COMPANY_HEARTBEAT_INTERVAL_MS);
+      refreshTimer = setInterval(() => {
+        if (profile?.rol === "COMPANIA") refresh();
+        else if (profile) refreshCompanyPresence();
+      }, 10000);
+    }
+    if (!presenceLabelTimer) {
+      presenceLabelTimer = setInterval(updateCompanyPresenceLabels, 1000);
+    }
+    sendHeartbeat();
+  } finally {
+    enteringApp = false;
   }
+}
 
-  profile = p.data;
-  byId("addVehicle").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
-  byId("manageUsersButton").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
-  if (profile.rol === "COMPANIA") {
-    const initialGroup = Object.entries(vehicleGroups).find(([, codes]) =>
-      codes.includes(profile.companias?.codigo)
-    );
-    if (initialGroup) byId("companiaSeleccionada").value = initialGroup[0];
-  }
-  byId("userInfo").textContent =
-    `${profile.nombre} · ${profile.rol}` +
-    `${profile.companias ? ` · ${profile.companias.codigo}` : ""}`;
+function stopAppSessionRenewal() {
+  if (appSessionRenewTimer) clearInterval(appSessionRenewTimer);
+  appSessionRenewTimer = null;
+  appSessionRenewInProgress = false;
+}
 
-  const central = profile.rol !== "COMPANIA";
-  byId("modo").value = central ? "central" : "compania";
-  byId("modo").disabled = !central;
-  byId("vistaCentral").classList.toggle("hidden", !central);
-  byId("vistaCompania").classList.toggle("hidden", central);
-
-  await refresh();
-  subscribe();
-  if (!refreshTimer) {
-    setInterval(sendHeartbeat, COMPANY_HEARTBEAT_INTERVAL_MS);
-    refreshTimer = setInterval(() => {
-      if (profile?.rol === "COMPANIA") refresh();
-      else if (profile) refreshCompanyPresence();
-    }, 10000);
-  }
-  if (!presenceLabelTimer) {
-    presenceLabelTimer = setInterval(updateCompanyPresenceLabels, 1000);
-  }
-  sendHeartbeat();
+function startAppSessionRenewal() {
+  if (appSessionRenewTimer) return;
+  appSessionRenewTimer = setInterval(async () => {
+    if (appSessionRenewInProgress || !profile) return;
+    appSessionRenewInProgress = true;
+    try {
+      const { data: renewed, error } = await db.rpc("renovar_sesion_app");
+      if (!error && renewed === false) {
+        stopAppSessionRenewal();
+        profile = null;
+        await db.auth.signOut({ scope: "local" });
+        message("La sesión de esta cuenta ya no está activa en este equipo. Vuelve a iniciar sesión.", true);
+      }
+    } finally {
+      appSessionRenewInProgress = false;
+    }
+  }, APP_SESSION_RENEW_INTERVAL_MS);
 }
 
 async function refresh() {
