@@ -48,17 +48,10 @@ function renderTable(companies) {
   head.innerHTML = `<tr>
     <th scope="col">CIA</th>
     ${Array.from({ length: maxVehicles }, (_, index) => `<th scope="col">VEHÍCULO ${index + 1}</th>`).join("")}
-    <th scope="col">ACTUALIZACIÓN</th>
   </tr>`;
 
   body.innerHTML = sortedCompanies.map(company => {
     const vehicles = company.vehiculos || [];
-    const latest = vehicles.reduce((value, vehicle) => {
-      if (!vehicle.actualizado_en) return value;
-      return !value || new Date(vehicle.actualizado_en) > new Date(value)
-        ? vehicle.actualizado_en
-        : value;
-    }, null);
     const vehicleCells = Array.from({ length: maxVehicles }, (_, index) => {
       const vehicle = vehicles[index];
       if (!vehicle) return `<td class="blank" aria-label="Sin vehículo"></td>`;
@@ -72,7 +65,6 @@ function renderTable(companies) {
     return `<tr>
       <td class="company">${escapeHtml(company.codigo_compania || "")}</td>
       ${vehicleCells}
-      <td class="updated">${escapeHtml(formatDate(latest))}</td>
     </tr>`;
   }).join("");
 }

@@ -22,13 +22,11 @@ body {
 table { width: 100%; min-width: 900px; border-collapse: collapse; table-layout: fixed; }
 th { padding: 13px 8px; background: #607d8b; color: white; font-size: 13px; }
 th:first-child, td.company { width: 115px; }
-th:last-child, td.updated { width: 150px; }
 td { height: 64px; border: 1px solid #dce2e5; text-align: center; }
 td.company { background: #eceff1; font-size: 16px; font-weight: bold; }
 td.vehicle { padding: 7px 4px; font-size: 14px; font-weight: bold; }
 td.vehicle strong { display: block; }
 td.vehicle small { display: block; margin-top: 4px; font-size: 11px; }
-td.updated { padding: 5px; color: #78909c; font-size: 11px; }
 td.blank { background: white; }
 .status-disponible { background: #dcedc8; color: #33691e; }
 .status-emergencia { background: #ef5350; color: white; }
