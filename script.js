@@ -43,6 +43,8 @@ const COMPANY_HEARTBEAT_INTERVAL_MS = 5 * 1000;
 const APP_SESSION_RENEW_INTERVAL_MS = 10 * 1000;
 
 function compareCompaniesByGroupOrder(a, b, group) {
+  if (Number.isFinite(Number(a.orden)) && Number.isFinite(Number(b.orden)) &&
+      Number(a.orden) !== Number(b.orden)) return Number(a.orden) - Number(b.orden);
   const codes = vehicleGroups[group] || [];
   const aIndex = codes.indexOf(a.codigo);
   const bIndex = codes.indexOf(b.codigo);
@@ -157,7 +159,7 @@ async function enterApp() {
 
     const p = await db
       .from("perfiles")
-      .select("id,nombre,rol,compania_id,activo,companias(codigo,nombre)")
+      .select("id,nombre,rol,compania_id,activo,companias(codigo,nombre,grupo)")
       .eq("id", user.id)
       .single();
 
@@ -175,10 +177,10 @@ async function enterApp() {
     byId("manageUsersButton").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
     byId("resetVehiclesButton").classList.toggle("hidden", !["CENTRAL", "ADMINISTRADOR"].includes(profile.rol));
     if (profile.rol === "COMPANIA") {
-      const initialGroup = Object.entries(vehicleGroups).find(([, codes]) =>
-        codes.includes(profile.companias?.codigo)
-      );
-      if (initialGroup) byId("companiaSeleccionada").value = initialGroup[0];
+      const initialGroup = profile.companias?.grupo
+        ? profile.companias.grupo
+        : (Object.entries(vehicleGroups).find(([, codes]) => codes.includes(profile.companias?.codigo)) || [])[0];
+      if (initialGroup) byId("companiaSeleccionada").value = initialGroup;
     }
     byId("userInfo").textContent =
       `${profile.nombre} · ${profile.rol}` +
@@ -238,9 +240,9 @@ async function refresh() {
   const [c, v, h, t, p] = await Promise.all([
     db
       .from("companias")
-      .select("id,codigo,nombre,ultimo_contacto")
+      .select("id,codigo,nombre,ultimo_contacto,grupo,orden")
       .eq("activo", true)
-      .order("codigo"),
+      .order("orden"),
     loadVehiclesForRole(),
 
     db
@@ -274,6 +276,7 @@ async function refresh() {
   historyRows = h.data || [];
 
   renderCompanies();
+  renderCompanyManagement();
   renderAdminDropdowns();
   renderUserCompanyDropdown();
   renderCentral();
@@ -321,6 +324,35 @@ function renderUserCompanyDropdown() {
   if (companies.some(company => company.id === previous)) select.value = previous;
 }
 
+function companyGroup(company) {
+  if (company && (company.grupo === "ciudad" || company.grupo === "provincias")) return company.grupo;
+  if ((vehicleGroups.provincias || []).includes(company?.codigo)) return "provincias";
+  return "ciudad";
+}
+function companiesForGroup(group) {
+  return companies.filter(company => companyGroup(company) === group);
+}
+function renderCompanyManagement() {
+  const body = byId("companyAdminBody");
+  if (!body) return;
+  body.replaceChildren();
+  companies.forEach(company => {
+    const group = companyGroup(company);
+    const row = document.createElement("tr");
+    row.innerHTML = '<td>' + esc(company.codigo) + '</td><td>' + esc(company.nombre) +
+      '</td><td>' + esc(vehicleGroupNames[group] || group) + '</td><td><div class="company-admin-actions">' +
+      '<button type="button" class="company-edit" data-company-edit="' + esc(company.id) + '">EDITAR</button>' +
+      '<button type="button" class="company-retire" data-company-retire="' + esc(company.id) + '">RETIRAR</button>' +
+      '</div></td>';
+    body.append(row);
+  });
+}
+function resetCompanyAdminForm() {
+  byId("companyAdminForm").reset();
+  byId("companyAdminId").value = "";
+  byId("companyAdminSave").textContent = "AGREGAR COMPAÑÍA";
+  byId("companyAdminCancel").classList.add("hidden");
+}
 function updateNewUserRoleFields() {
   const isCompany = byId("newUserRole").value === "COMPANIA";
   byId("newUserCompanyField").classList.toggle("hidden", !isCompany);
@@ -421,11 +453,8 @@ function renderCompanies() {
 
 function filtered() {
   const group = byId("companiaSeleccionada").value;
-  const codes = vehicleGroups[group] || [];
-
-  return vehicles.filter(v =>
-    codes.includes(v.companias?.codigo)
-  );
+  const ids = new Set(companiesForGroup(group).map(company => company.id));
+  return vehicles.filter(v => ids.has(v.compania_id));
 }
 
 function emptyVehicleCell(companyId) {
@@ -536,10 +565,9 @@ async function refreshCompanyPresence() {
 }
 
 function renderCentral() {
-  const codes = new Set(vehicleGroups[byId("companiaSeleccionada").value] || []);
+  const group = byId("companiaSeleccionada").value;
   const list = filtered();
-  const companyRows = companies
-    .filter(company => codes.has(company.codigo))
+  const companyRows = companiesForGroup(group)
     .sort((a, b) => compareCompaniesByGroupOrder(a, b, byId("companiaSeleccionada").value))
     .map(company => ({
       company,
@@ -551,16 +579,17 @@ function renderCentral() {
 
 function renderCompany() {
   const group = byId("companiaSeleccionada").value;
-  const groupCodes = vehicleGroups[group] || [];
+  const groupCompanies = companiesForGroup(group);
+  const groupCompanyIds = new Set(groupCompanies.map(company => company.id));
   const ownCompany = companies.find(c => c.id === profile?.compania_id);
   byId("nombreCompania").textContent = profile?.rol === "COMPANIA"
     ? `UNIDADES DEL GRUPO · COMPAÑÍA ${ownCompany?.codigo || ""}`
     : (vehicleGroupNames[group] || "GRUPO DE UNIDADES");
 
-  const visibleCompanies = companies.filter(c => groupCodes.includes(c.codigo));
+  const visibleCompanies = groupCompanies;
   visibleCompanies.sort((a, b) => compareCompaniesByGroupOrder(a, b, group));
 
-  const visibleVehicles = vehicles.filter(v => groupCodes.includes(v.companias?.codigo));
+  const visibleVehicles = vehicles.filter(v => groupCompanyIds.has(v.compania_id));
 
   const body = byId("vehiculosCompania");
   const companyRows = visibleCompanies.map(company => ({
@@ -724,13 +753,13 @@ function renderPersonnel() {
     return;
   }
 
-  const selectedCodes = new Set(vehicleGroups[byId("companiaSeleccionada").value] || []);
+  const selectedIds = new Set(companiesForGroup(byId("companiaSeleccionada").value).map(company => company.id));
   const body = byId("personnelOverviewBody");
   body.replaceChildren();
   const canEdit = profile?.rol === "ADMINISTRADOR";
 
   companies
-    .filter(company => selectedCodes.has(company.codigo))
+    .filter(company => selectedIds.has(company.id))
     .sort((a, b) => compareCompaniesByGroupOrder(a, b, byId("companiaSeleccionada").value))
     .forEach(company => {
       const record = personnelRows.find(row => row.compania_id === company.id);
@@ -1027,6 +1056,7 @@ byId("userGateForm").addEventListener("submit", async event => {
     closeUserGateModal();
     byId("userManagement").classList.remove("hidden");
     byId("manageUsersButton").setAttribute("aria-expanded", "true");
+    renderCompanyManagement();
     message("Acceso autorizado. Al cerrar el panel, tendrás que ingresar la clave otra vez.");
     byId("newUserName").focus();
   } catch (error) {
@@ -1038,6 +1068,58 @@ byId("userGateForm").addEventListener("submit", async event => {
     submit.disabled = false;
     submit.textContent = "CONTINUAR";
   }
+});
+byId("companyAdminForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (profile?.rol !== "ADMINISTRADOR" || !userManagementAccessCode) return;
+  const save = byId("companyAdminSave");
+  save.disabled = true;
+  const companyId = byId("companyAdminId").value || null;
+  try {
+    const { error } = await db.rpc("admin_guardar_compania", {
+      p_compania_id: companyId,
+      p_codigo: byId("companyAdminCode").value.trim().toUpperCase(),
+      p_nombre: byId("companyAdminName").value.trim(),
+      p_grupo: byId("companyAdminGroup").value
+    });
+    if (error) throw error;
+    resetCompanyAdminForm();
+    await refresh();
+    message(companyId ? "Compañía actualizada." : "Compañía agregada.");
+  } catch (error) {
+    message(error.message || "No se pudo guardar la compañía. Revisa si el código ya existe.", true);
+  } finally { save.disabled = false; }
+});
+byId("companyAdminCancel").addEventListener("click", resetCompanyAdminForm);
+byId("companyAdminBody").addEventListener("click", async event => {
+  if (profile?.rol !== "ADMINISTRADOR" || !userManagementAccessCode) return;
+  const editButton = event.target.closest("[data-company-edit]");
+  if (editButton) {
+    const company = companies.find(item => item.id === editButton.dataset.companyEdit);
+    if (!company) return;
+    byId("companyAdminId").value = company.id;
+    byId("companyAdminCode").value = company.codigo;
+    byId("companyAdminName").value = company.nombre;
+    byId("companyAdminGroup").value = companyGroup(company);
+    byId("companyAdminSave").textContent = "GUARDAR CAMBIOS";
+    byId("companyAdminCancel").classList.remove("hidden");
+    byId("companyAdminCode").focus();
+    return;
+  }
+  const retireButton = event.target.closest("[data-company-retire]");
+  if (!retireButton) return;
+  const company = companies.find(item => item.id === retireButton.dataset.companyRetire);
+  if (!company || !window.confirm("¿Retirar " + company.codigo + "? Dejará de aparecer activa. Sus vehículos e historial se conservarán archivados.")) return;
+  retireButton.disabled = true;
+  try {
+    const { error } = await db.rpc("admin_retirar_compania", { p_compania_id: company.id });
+    if (error) throw error;
+    resetCompanyAdminForm();
+    await refresh();
+    message(company.codigo + " fue retirada. El historial se conservó.");
+  } catch (error) {
+    message(error.message || "No se pudo retirar la compañía. Verifica si tiene usuarios activos asignados.", true);
+  } finally { retireButton.disabled = false; }
 });
 byId("newUserRole").addEventListener("change", updateNewUserRoleFields);
 byId("createUserForm").addEventListener("submit", createUser);

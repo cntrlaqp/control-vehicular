@@ -572,3 +572,15 @@ td.cia strong { display: block; }
 #grupoUnidades {
   min-width: 300px;
 }
+
+.company-admin { margin-top: 26px; padding-top: 22px; border-top: 1px solid #d7dfe2; }
+.company-admin-form { grid-template-columns: repeat(4, minmax(150px, 1fr)); }
+.company-admin-table { margin-top: 18px; }
+.company-admin-table table { min-width: 700px; }
+.company-admin-table td { padding: 9px 12px; }
+.company-admin-actions { display: flex; justify-content: center; gap: 8px; }
+.company-admin-actions button { padding: 7px 10px; border: 0; border-radius: 4px; cursor: pointer; font-weight: bold; }
+.company-edit { background: #607d8b; color: #fff; }
+.company-retire { background: #c62828; color: #fff; }
+.company-admin-form .save { min-height: 40px; border: 0; border-radius: 5px; cursor: pointer; font-weight: bold; }
+@media (max-width: 800px) { .company-admin-form { grid-template-columns: 1fr; } }

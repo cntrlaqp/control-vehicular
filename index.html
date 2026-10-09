@@ -87,6 +87,30 @@
         </div>
         <button id="createUserSubmit" class="save" type="submit">CREAR CUENTA</button>
       </form>
+      <section class="company-admin">
+        <div class="panel-title">GESTIONAR COMPAÑÍAS</div>
+        <p class="user-management-help">Agrega, renombra, cambia de grupo o retira compañías. El retiro conserva el historial y requiere que no queden usuarios activos asignados.</p>
+        <form id="companyAdminForm" class="user-form company-admin-form">
+          <input id="companyAdminId" type="hidden">
+          <div class="user-form-field"><label for="companyAdminCode">Código de compañía</label><input id="companyAdminCode" maxlength="40" required></div>
+          <div class="user-form-field"><label for="companyAdminName">Nombre</label><input id="companyAdminName" maxlength="100" required></div>
+          <div class="user-form-field">
+            <label for="companyAdminGroup">Grupo</label>
+            <select id="companyAdminGroup" required>
+              <option value="ciudad">Unidades Vehiculares Arequipa Ciudad</option>
+              <option value="provincias">Unidades Vehiculares Provincias</option>
+            </select>
+          </div>
+          <button id="companyAdminSave" class="save" type="submit">AGREGAR COMPAÑÍA</button>
+          <button id="companyAdminCancel" class="cancel hidden" type="button">CANCELAR EDICIÓN</button>
+        </form>
+        <div class="table-container company-admin-table">
+          <table>
+            <thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>GRUPO</th><th>ACCIONES</th></tr></thead>
+            <tbody id="companyAdminBody"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
     <section class="page-title">
