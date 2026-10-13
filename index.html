@@ -58,6 +58,7 @@
         <select id="centralistaSelect" aria-label="Centralista de turno">
           <option value="">— Sin centralista en turno —</option>
         </select>
+        <div id="centralistaCurrentName" class="centralista-readonly hidden" aria-live="polite"></div>
       </div>
       <button id="addVehicle" class="btn-simular hidden" type="button">＋ AGREGAR VEHÍCULO</button>
       <button id="manageUsersButton" class="btn-simular hidden" type="button" aria-expanded="false" aria-controls="userManagement">＋ GESTIONAR USUARIOS</button>
@@ -342,7 +343,7 @@
   </form>
 </div>
 
-<script src="script.js?v=20261013-centralista-turno"></script>
+<script src="script.js?v=20261013-centralista-readonly"></script>
 </body>
 </html>
 

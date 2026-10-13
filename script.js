@@ -357,10 +357,15 @@ function renderCompanyManagement() {
 }
 function renderCentralistaControls() {
   const select = byId("centralistaSelect");
+  const readOnly = byId("centralistaCurrentName");
   const body = byId("centralistaAdminBody");
-  if (!select || !body) return;
+  if (!select || !readOnly || !body) return;
 
   const current = centralistas.find(item => item.en_turno);
+  const isCompanyUser = profile?.rol === "COMPANIA";
+  select.classList.toggle("hidden", isCompanyUser);
+  readOnly.classList.toggle("hidden", !isCompanyUser);
+  readOnly.textContent = current?.nombre || "Sin centralista en turno";
   select.replaceChildren();
   const placeholder = document.createElement("option");
   placeholder.value = "";
