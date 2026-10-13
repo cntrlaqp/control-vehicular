@@ -373,7 +373,7 @@ function renderCentralistaControls() {
     select.append(option);
   });
   select.value = current?.id || "";
-  select.disabled = centralistas.length === 0;
+  select.disabled = centralistas.length === 0 || !canSetCentralistaTurn();
 
   body.replaceChildren();
   centralistas.forEach(item => {
@@ -387,6 +387,11 @@ function renderCentralistaControls() {
       '</div></td>';
     body.append(row);
   });
+}
+
+function canSetCentralistaTurn() {
+  return profile?.rol === "CENTRAL" ||
+    (profile?.rol === "ADMINISTRADOR" && Boolean(userManagementAccessCode));
 }
 
 function resetCentralistaForm() {
@@ -1194,9 +1199,9 @@ byId("companyAdminBody").addEventListener("click", async event => {
   } finally { retireButton.disabled = false; }
 });
 byId("centralistaSelect").addEventListener("change", async event => {
-  if (profile?.rol !== "ADMINISTRADOR" || !userManagementAccessCode) {
+  if (!canSetCentralistaTurn()) {
     renderCentralistaControls();
-    message("Solo el administrador con acceso autorizado puede cambiar el centralista de turno.", true);
+    message("Solo el centralista de turno puede elegir un nombre. El administrador puede hacerlo después de validar su clave.", true);
     return;
   }
 
@@ -1213,7 +1218,7 @@ byId("centralistaSelect").addEventListener("change", async event => {
     renderCentralistaControls();
     message(error.message || "No se pudo actualizar el centralista de turno.", true);
   } finally {
-    select.disabled = centralistas.length === 0;
+    select.disabled = centralistas.length === 0 || !canSetCentralistaTurn();
   }
 });
 
