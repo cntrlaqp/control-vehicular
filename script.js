@@ -395,8 +395,7 @@ function renderCentralistaControls() {
 }
 
 function canSetCentralistaTurn() {
-  return profile?.rol === "CENTRAL" ||
-    (profile?.rol === "ADMINISTRADOR" && Boolean(userManagementAccessCode));
+  return ["CENTRAL", "ADMINISTRADOR"].includes(profile?.rol);
 }
 
 function resetCentralistaForm() {
@@ -1206,7 +1205,7 @@ byId("companyAdminBody").addEventListener("click", async event => {
 byId("centralistaSelect").addEventListener("change", async event => {
   if (!canSetCentralistaTurn()) {
     renderCentralistaControls();
-    message("Solo el centralista de turno puede elegir un nombre. El administrador puede hacerlo después de validar su clave.", true);
+    message("Solo las cuentas CENTRAL y ADMINISTRADOR pueden cambiar el centralista de turno.", true);
     return;
   }
 
