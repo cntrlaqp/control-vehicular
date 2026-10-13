@@ -898,7 +898,14 @@ async function guardarCambio() {
       });
       if (error) {
         byId("guardarCambio").disabled = false;
-        message("No se guardaron los datos del vehículo. Revisa el código, la compañía y el tipo.", true);
+        const duplicateCode = error.code === "23505" ||
+          /ya está en uso|duplicate key/i.test(error.message || "");
+        message(
+          duplicateCode
+            ? "Ese nombre de vehículo ya está en uso. Escribe un nombre distinto."
+            : "No se guardaron los datos del vehículo. Revisa la compañía y el tipo.",
+          true
+        );
         return;
       }
       vehicleId = data;
