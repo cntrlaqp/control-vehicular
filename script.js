@@ -173,7 +173,7 @@ async function enterApp() {
     profile = p.data;
     byId("loginPanel").classList.add("hidden");
     byId("application").classList.remove("hidden");
-    byId("addVehicle").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
+    byId("addVehicle").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR" || !userManagementAccessCode);
     byId("manageUsersButton").classList.toggle("hidden", profile.rol !== "ADMINISTRADOR");
     byId("resetVehiclesButton").classList.toggle("hidden", !["CENTRAL", "ADMINISTRADOR"].includes(profile.rol));
     if (profile.rol === "COMPANIA") {
@@ -826,15 +826,12 @@ function openVehicle(v) {
     : "CAMBIAR ESTADO";
   byId("modalVehiculo").textContent =
     `${v.companias?.codigo || ""} — ${v.codigo}`;
-  byId("adminVehicleFields").classList.toggle(
-    "hidden",
-    profile?.rol !== "ADMINISTRADOR"
-  );
-  byId("desactivarVehiculo").classList.toggle(
-    "hidden",
-    profile?.rol !== "ADMINISTRADOR"
-  );
-  if (profile?.rol === "ADMINISTRADOR") {
+  const adminEditingEnabled =
+    profile?.rol === "ADMINISTRADOR" && Boolean(userManagementAccessCode);
+  byId("adminVehicleFields").classList.toggle("hidden", !adminEditingEnabled);
+  byId("desactivarVehiculo").classList.toggle("hidden", !adminEditingEnabled);
+  byId("cancelarCambio").textContent = adminEditingEnabled ? "CERRAR" : "CANCELAR";
+  if (adminEditingEnabled) {
     byId("adminVehicleCode").value = v.codigo;
     byId("adminVehicleCompany").value = v.compania_id;
     byId("adminVehicleType").value = v.tipo_id;
@@ -846,11 +843,16 @@ function openVehicle(v) {
 
 function openNewVehicle(companyId = null) {
   if (profile?.rol !== "ADMINISTRADOR") return;
+  if (!userManagementAccessCode) {
+    message("Ingresa a GESTIONAR USUARIOS y valida la clave para agregar vehículos.", true);
+    return;
+  }
   selectedVehicle = null;
   byId("modalTitle").textContent = "AGREGAR VEHÍCULO";
   byId("modalVehiculo").textContent = "Nueva unidad";
   byId("adminVehicleFields").classList.remove("hidden");
   byId("desactivarVehiculo").classList.add("hidden");
+  byId("cancelarCambio").textContent = "CERRAR";
   byId("adminVehicleCode").value = "";
   if (companyId) byId("adminVehicleCompany").value = companyId;
   else if (companies.length) byId("adminVehicleCompany").value = companies[0].id;
@@ -867,6 +869,10 @@ function cerrarModal() {
 
 async function guardarCambio() {
   const creatingVehicle = !selectedVehicle;
+  if (creatingVehicle && (profile?.rol !== "ADMINISTRADOR" || !userManagementAccessCode)) {
+    message("Ingresa a GESTIONAR USUARIOS y valida la clave para agregar vehículos.", true);
+    return;
+  }
   const estado = byId("nuevoEstado").value;
   const observacion = byId("observacion").value.trim();
   byId("guardarCambio").disabled = true;
@@ -874,7 +880,7 @@ async function guardarCambio() {
   let vehicleId = selectedVehicle?.id || null;
   let metadataChanged = false;
 
-  if (profile?.rol === "ADMINISTRADOR") {
+  if (profile?.rol === "ADMINISTRADOR" && userManagementAccessCode) {
     const codigo = byId("adminVehicleCode").value.trim();
     const companiaId = byId("adminVehicleCompany").value;
     const tipoId = byId("adminVehicleType").value;
@@ -934,7 +940,7 @@ async function guardarCambio() {
 }
 
 async function deactivateVehicle() {
-  if (profile?.rol !== "ADMINISTRADOR" || !selectedVehicle) return;
+  if (profile?.rol !== "ADMINISTRADOR" || !userManagementAccessCode || !selectedVehicle) return;
   const confirmed = window.confirm(
     `¿Desactivar ${selectedVehicle.codigo}? Se ocultará de las vistas activas y conservará su historial.`
   );
@@ -1009,7 +1015,9 @@ byId("manageUsersButton").addEventListener("click", () => {
   if (!opening) {
     panel.classList.add("hidden");
     userManagementAccessCode = "";
+    byId("addVehicle").classList.add("hidden");
     byId("manageUsersButton").setAttribute("aria-expanded", "false");
+    if (!byId("modal").classList.contains("hidden")) cerrarModal();
     return;
   }
 
@@ -1053,6 +1061,7 @@ byId("userGateForm").addEventListener("submit", async event => {
     if (data?.error) throw new Error(data.error);
 
     userManagementAccessCode = enteredCode;
+    byId("addVehicle").classList.remove("hidden");
     closeUserGateModal();
     byId("userManagement").classList.remove("hidden");
     byId("manageUsersButton").setAttribute("aria-expanded", "true");
