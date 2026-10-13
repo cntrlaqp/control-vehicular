@@ -902,7 +902,7 @@ async function guardarCambio() {
           /ya está en uso|duplicate key/i.test(error.message || "");
         message(
           duplicateCode
-            ? "Ese nombre de vehículo ya está en uso. Escribe un nombre distinto."
+            ? "Ese código pertenece a otra unidad activa o a otra compañía. Revisa el código o desactiva esa unidad primero."
             : "No se guardaron los datos del vehículo. Revisa la compañía y el tipo.",
           true
         );
