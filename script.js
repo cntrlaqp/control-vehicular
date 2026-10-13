@@ -11,7 +11,7 @@ const labels = {
   emergencia: "EN EMERGENCIA",
   fuera: "FUERA DE SERVICIO",
   reserva: "EN RESERVA",
-  no_reportado: "NO REPORTADO"
+  no_reportado: "NO REPORTADO / UBO en 10.39"
 };
 
 let profile = null;
