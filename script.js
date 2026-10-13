@@ -238,7 +238,7 @@ function startAppSessionRenewal() {
 }
 
 async function refresh() {
-  const [c, v, h, t, p, z] = await Promise.all([
+  const [c, v, h, ch, t, p, z] = await Promise.all([
     db
       .from("companias")
       .select("id,codigo,nombre,ultimo_contacto,grupo,orden")
@@ -249,8 +249,13 @@ async function refresh() {
     db
       .from("historial_estados")
       .select(
-        "id,created_at,estado_anterior,estado_nuevo,observacion,vehiculos(codigo,companias(codigo)),perfiles(nombre)"
+        "id,created_at,estado_anterior,estado_nuevo,centralista_nombre,observacion,vehiculos(codigo,companias(codigo)),perfiles(nombre)"
       )
+      .order("created_at", { ascending: false })
+      .limit(30),
+    db
+      .from("historial_centralistas_turno")
+      .select("id,created_at,centralista_anterior,centralista_nuevo,usuario_nombre")
       .order("created_at", { ascending: false })
       .limit(30),
     db
@@ -268,7 +273,7 @@ async function refresh() {
       .order("nombre")
   ]);
 
-  const error = [c, v, h, t, p, z].find(x => x.error);
+  const error = [c, v, h, ch, t, p, z].find(x => x.error);
 
   if (error) {
     message("No se pudieron cargar los datos desde el servidor.", true);
@@ -280,7 +285,10 @@ async function refresh() {
   personnelRows = p.data || [];
   centralistas = z.data || [];
   vehicles = v.data || [];
-  historyRows = h.data || [];
+  historyRows = [
+    ...(h.data || []).map(row => ({ ...row, tipo_movimiento: "vehicular" })),
+    ...(ch.data || []).map(row => ({ ...row, tipo_movimiento: "centralista" }))
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 30);
 
   renderCompanies();
   renderCompanyManagement();
@@ -691,7 +699,15 @@ function renderSummary() {
 }
 
 function renderHistory() {
-  byId("historial").innerHTML = historyRows.map(r => `
+  byId("historial").innerHTML = historyRows.map(r => r.tipo_movimiento === "centralista" ? `
+    <div class="history-item">
+      <span class="history-time">${asDate(r.created_at)}</span>
+      <strong>CAMBIO DE TURNO</strong> · Centralista:
+      <strong>${esc(r.centralista_anterior || "Sin centralista")}</strong> →
+      <strong>${esc(r.centralista_nuevo || "Sin centralista")}</strong> ·
+      ${esc(r.usuario_nombre || "")}
+    </div>
+  ` : `
     <div class="history-item">
       <span class="history-time">${asDate(r.created_at)}</span>
       <strong>
@@ -700,6 +716,7 @@ function renderHistory() {
       </strong>:
       ${stateName(r.estado_anterior)} →
       <strong>${stateName(r.estado_nuevo)}</strong> ·
+      Centralista: <strong>${esc(r.centralista_nombre || "Sin centralista")}</strong> ·
       ${esc(r.perfiles?.nombre || "")}
       ${r.observacion ? ` — ${esc(r.observacion)}` : ""}
     </div>
@@ -729,46 +746,59 @@ async function exportHistoryToExcel() {
 
   try {
     const pageSize = 500;
-    const rows = [];
-    let offset = 0;
-
-    while (true) {
-      let query = db
-        .from("historial_estados")
-        .select("created_at,estado_anterior,estado_nuevo,observacion,vehiculos(codigo,companias(codigo)),perfiles(nombre)")
-        .order("created_at", { ascending: true })
-        .range(offset, offset + pageSize - 1);
-
-      if (fromValue) {
-        query = query.gte("created_at", new Date(`${fromValue}T00:00:00`).toISOString());
+    const fetchAllPages = async (table, columns) => {
+      const result = [];
+      let offset = 0;
+      while (true) {
+        let query = db.from(table).select(columns).order("created_at", { ascending: true })
+          .range(offset, offset + pageSize - 1);
+        if (fromValue) query = query.gte("created_at", new Date(`${fromValue}T00:00:00`).toISOString());
+        if (toValue) {
+          const exclusiveEnd = new Date(`${toValue}T00:00:00`);
+          exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+          query = query.lt("created_at", exclusiveEnd.toISOString());
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        result.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+        offset += pageSize;
       }
-      if (toValue) {
-        const exclusiveEnd = new Date(`${toValue}T00:00:00`);
-        exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
-        query = query.lt("created_at", exclusiveEnd.toISOString());
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      rows.push(...(data || []));
-      if (!data || data.length < pageSize) break;
-      offset += pageSize;
-    }
+      return result;
+    };
+    const [vehicleRows, centralistaRows] = await Promise.all([
+      fetchAllPages(
+        "historial_estados",
+        "created_at,estado_anterior,estado_nuevo,centralista_nombre,observacion,vehiculos(codigo,companias(codigo)),perfiles(nombre)"
+      ),
+      fetchAllPages(
+        "historial_centralistas_turno",
+        "created_at,centralista_anterior,centralista_nuevo,usuario_nombre"
+      )
+    ]);
+    const rows = [
+      ...vehicleRows.map(row => ({ ...row, tipo_movimiento: "vehicular" })),
+      ...centralistaRows.map(row => ({ ...row, tipo_movimiento: "centralista" }))
+    ].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
     if (!rows.length) {
       message("No hay registros de historial para el período seleccionado.", true);
       return;
     }
 
-    const headers = ["Fecha y hora", "Compañía", "Vehículo", "Estado anterior", "Estado nuevo", "Usuario", "Observación"];
+    const headers = ["Fecha y hora", "Tipo de movimiento", "Compañía", "Vehículo", "Estado anterior", "Estado nuevo", "Centralista", "Usuario", "Observación"];
     const csvRows = [headers, ...rows.map(row => [
       row.created_at ? new Date(row.created_at).toLocaleString("es-PE") : "",
-      row.vehiculos?.companias?.codigo || "",
-      row.vehiculos?.codigo || "",
-      stateName(row.estado_anterior),
-      stateName(row.estado_nuevo),
-      row.perfiles?.nombre || "",
-      row.observacion || ""
+      row.tipo_movimiento === "centralista" ? "CAMBIO DE TURNO" : "MOVIMIENTO VEHICULAR",
+      row.tipo_movimiento === "vehicular" ? row.vehiculos?.companias?.codigo || "" : "",
+      row.tipo_movimiento === "vehicular" ? row.vehiculos?.codigo || "" : "",
+      row.tipo_movimiento === "vehicular" ? stateName(row.estado_anterior) : "",
+      row.tipo_movimiento === "vehicular" ? stateName(row.estado_nuevo) : "",
+      row.tipo_movimiento === "centralista"
+        ? `${row.centralista_anterior || "Sin centralista"} → ${row.centralista_nuevo || "Sin centralista"}`
+        : row.centralista_nombre || "Sin centralista",
+      row.tipo_movimiento === "centralista" ? row.usuario_nombre || "" : row.perfiles?.nombre || "",
+      row.tipo_movimiento === "centralista" ? "" : row.observacion || ""
     ])];
     const csv = "\uFEFF" + csvRows.map(row => row.map(csvCell).join(";")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -1050,6 +1080,11 @@ function subscribe() {
     )
     .on(
       "postgres_changes",
+      { event: "*", schema: "public", table: "historial_centralistas_turno" },
+      refresh
+    )
+    .on(
+      "postgres_changes",
       { event: "*", schema: "public", table: "personal_disponible" },
       refresh
     )
@@ -1199,7 +1234,8 @@ byId("companyAdminBody").addEventListener("click", async event => {
     await refresh();
     message(company.codigo + " y sus datos asociados fueron eliminados permanentemente.");
   } catch (error) {
-    message(error.message || "No se pudo eliminar la compañía. Verifica si tiene cuentas asignadas.", true);
+    message(error.message || "No se pudo eliminar la compañía. Verifica que la migración SQL esté instalada y que no tenga cuentas asignadas.", true);
+    byId("appMessage")?.scrollIntoView({ behavior: "smooth", block: "center" });
   } finally { deleteButton.disabled = false; }
 });
 byId("centralistaSelect").addEventListener("change", async event => {
