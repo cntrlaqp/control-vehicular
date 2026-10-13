@@ -20,6 +20,7 @@ let companies = [];
 let vehicleTypes = [];
 let historyRows = [];
 let personnelRows = [];
+let centralistas = [];
 let selectedVehicle = null;
 let realtime = null;
 let refreshTimer = null;
@@ -237,7 +238,7 @@ function startAppSessionRenewal() {
 }
 
 async function refresh() {
-  const [c, v, h, t, p] = await Promise.all([
+  const [c, v, h, t, p, z] = await Promise.all([
     db
       .from("companias")
       .select("id,codigo,nombre,ultimo_contacto,grupo,orden")
@@ -259,10 +260,15 @@ async function refresh() {
       .order("nombre"),
     db
       .from("personal_disponible")
-      .select("compania_id,pilotos,bomberos,updated_at,companias(codigo)")
+      .select("compania_id,pilotos,bomberos,updated_at,companias(codigo)"),
+    db
+      .from("centralistas")
+      .select("id,nombre,en_turno")
+      .eq("activo", true)
+      .order("nombre")
   ]);
 
-  const error = [c, v, h, t, p].find(x => x.error);
+  const error = [c, v, h, t, p, z].find(x => x.error);
 
   if (error) {
     message("No se pudieron cargar los datos desde el servidor.", true);
@@ -272,11 +278,13 @@ async function refresh() {
   companies = c.data || [];
   vehicleTypes = t.data || [];
   personnelRows = p.data || [];
+  centralistas = z.data || [];
   vehicles = v.data || [];
   historyRows = h.data || [];
 
   renderCompanies();
   renderCompanyManagement();
+  renderCentralistaControls();
   renderAdminDropdowns();
   renderUserCompanyDropdown();
   renderCentral();
@@ -346,6 +354,46 @@ function renderCompanyManagement() {
       '</div></td>';
     body.append(row);
   });
+}
+function renderCentralistaControls() {
+  const select = byId("centralistaSelect");
+  const body = byId("centralistaAdminBody");
+  if (!select || !body) return;
+
+  const current = centralistas.find(item => item.en_turno);
+  select.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "— Sin centralista en turno —";
+  select.append(placeholder);
+  centralistas.forEach(item => {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.nombre;
+    select.append(option);
+  });
+  select.value = current?.id || "";
+  select.disabled = centralistas.length === 0;
+
+  body.replaceChildren();
+  centralistas.forEach(item => {
+    const row = document.createElement("tr");
+    row.innerHTML =
+      '<td>' + esc(item.nombre) + '</td>' +
+      '<td>' + (item.en_turno ? '<strong class="centralista-on-duty">EN TURNO</strong>' : '—') + '</td>' +
+      '<td><div class="company-admin-actions">' +
+      '<button type="button" class="company-edit" data-centralista-edit="' + esc(item.id) + '">EDITAR</button>' +
+      '<button type="button" class="company-retire" data-centralista-delete="' + esc(item.id) + '">BORRAR</button>' +
+      '</div></td>';
+    body.append(row);
+  });
+}
+
+function resetCentralistaForm() {
+  byId("centralistaAdminForm").reset();
+  byId("centralistaAdminId").value = "";
+  byId("centralistaAdminSave").textContent = "AGREGAR CENTRALISTA";
+  byId("centralistaAdminCancel").classList.add("hidden");
 }
 function resetCompanyAdminForm() {
   byId("companyAdminForm").reset();
@@ -1001,6 +1049,11 @@ function subscribe() {
       { event: "UPDATE", schema: "public", table: "companias" },
       refreshCompanyPresence
     )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "centralistas" },
+      refresh
+    )
     .subscribe(status => {
       byId("connectionText").textContent =
         status === "SUBSCRIBED" ? "EN VIVO · SUPABASE" : "RECONECTANDO…";
@@ -1023,6 +1076,8 @@ byId("manageUsersButton").addEventListener("click", () => {
     panel.classList.add("hidden");
     userManagementAccessCode = "";
     byId("addVehicle").classList.add("hidden");
+    resetCentralistaForm();
+    renderCentralistaControls();
     byId("manageUsersButton").setAttribute("aria-expanded", "false");
     if (!byId("modal").classList.contains("hidden")) cerrarModal();
     return;
@@ -1073,6 +1128,7 @@ byId("userGateForm").addEventListener("submit", async event => {
     byId("userManagement").classList.remove("hidden");
     byId("manageUsersButton").setAttribute("aria-expanded", "true");
     renderCompanyManagement();
+    renderCentralistaControls();
     message("Acceso autorizado. Al cerrar el panel, tendrás que ingresar la clave otra vez.");
     byId("newUserName").focus();
   } catch (error) {
@@ -1136,6 +1192,89 @@ byId("companyAdminBody").addEventListener("click", async event => {
   } catch (error) {
     message(error.message || "No se pudo retirar la compañía. Verifica si tiene usuarios activos asignados.", true);
   } finally { retireButton.disabled = false; }
+});
+byId("centralistaSelect").addEventListener("change", async event => {
+  if (profile?.rol !== "ADMINISTRADOR" || !userManagementAccessCode) {
+    renderCentralistaControls();
+    message("Solo el administrador con acceso autorizado puede cambiar el centralista de turno.", true);
+    return;
+  }
+
+  const select = event.currentTarget;
+  select.disabled = true;
+  try {
+    const { error } = await db.rpc("admin_establecer_centralista", {
+      p_centralista_id: select.value || null
+    });
+    if (error) throw error;
+    await refresh();
+    message("Centralista de turno actualizado.");
+  } catch (error) {
+    renderCentralistaControls();
+    message(error.message || "No se pudo actualizar el centralista de turno.", true);
+  } finally {
+    select.disabled = centralistas.length === 0;
+  }
+});
+
+byId("centralistaAdminForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (profile?.rol !== "ADMINISTRADOR" || !userManagementAccessCode) {
+    message("Ingresa a GESTIONAR USUARIOS y valida la clave para administrar centralistas.", true);
+    return;
+  }
+  const save = byId("centralistaAdminSave");
+  const centralistaId = byId("centralistaAdminId").value || null;
+  save.disabled = true;
+  try {
+    const { error } = await db.rpc("admin_guardar_centralista", {
+      p_centralista_id: centralistaId,
+      p_nombre: byId("centralistaAdminName").value.trim()
+    });
+    if (error) throw error;
+    resetCentralistaForm();
+    await refresh();
+    message(centralistaId ? "Centralista actualizado." : "Centralista agregado.");
+  } catch (error) {
+    message(error.message || "No se pudo guardar el centralista. Revisa si el nombre ya existe.", true);
+  } finally {
+    save.disabled = false;
+  }
+});
+
+byId("centralistaAdminCancel").addEventListener("click", resetCentralistaForm);
+byId("centralistaAdminBody").addEventListener("click", async event => {
+  if (profile?.rol !== "ADMINISTRADOR" || !userManagementAccessCode) return;
+  const editButton = event.target.closest("[data-centralista-edit]");
+  if (editButton) {
+    const item = centralistas.find(centralista => centralista.id === editButton.dataset.centralistaEdit);
+    if (!item) return;
+    byId("centralistaAdminId").value = item.id;
+    byId("centralistaAdminName").value = item.nombre;
+    byId("centralistaAdminSave").textContent = "GUARDAR CAMBIOS";
+    byId("centralistaAdminCancel").classList.remove("hidden");
+    byId("centralistaAdminName").focus();
+    return;
+  }
+
+  const deleteButton = event.target.closest("[data-centralista-delete]");
+  if (!deleteButton) return;
+  const item = centralistas.find(centralista => centralista.id === deleteButton.dataset.centralistaDelete);
+  if (!item || !window.confirm("¿Borrar a " + item.nombre + " de la lista de centralistas?")) return;
+  deleteButton.disabled = true;
+  try {
+    const { error } = await db.rpc("admin_borrar_centralista", {
+      p_centralista_id: item.id
+    });
+    if (error) throw error;
+    resetCentralistaForm();
+    await refresh();
+    message(item.nombre + " fue eliminado de la lista.");
+  } catch (error) {
+    message(error.message || "No se pudo eliminar el centralista.", true);
+  } finally {
+    deleteButton.disabled = false;
+  }
 });
 byId("newUserRole").addEventListener("change", updateNewUserRoleFields);
 byId("createUserForm").addEventListener("submit", createUser);

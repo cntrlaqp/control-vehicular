@@ -53,6 +53,12 @@
           <option value="provincias">Unidades Vehiculares Provincias</option>
         </select>
       </div>
+      <div class="control-group centralista-control">
+        <label for="centralistaSelect">CENTRALISTA</label>
+        <select id="centralistaSelect" aria-label="Centralista de turno">
+          <option value="">— Sin centralista en turno —</option>
+        </select>
+      </div>
       <button id="addVehicle" class="btn-simular hidden" type="button">＋ AGREGAR VEHÍCULO</button>
       <button id="manageUsersButton" class="btn-simular hidden" type="button" aria-expanded="false" aria-controls="userManagement">＋ GESTIONAR USUARIOS</button>
       <button id="resetVehiclesButton" class="btn-reset hidden" type="button">RESET</button>
@@ -108,6 +114,25 @@
           <table>
             <thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>GRUPO</th><th>ACCIONES</th></tr></thead>
             <tbody id="companyAdminBody"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="centralista-admin">
+        <div class="panel-title">GESTIONAR CENTRALISTAS</div>
+        <p class="user-management-help">Agrega, edita o elimina nombres. El selector CENTRALISTA de la barra superior indica quién está de turno; solo el administrador con acceso autorizado puede cambiarlo.</p>
+        <form id="centralistaAdminForm" class="user-form centralista-admin-form">
+          <input id="centralistaAdminId" type="hidden">
+          <div class="user-form-field">
+            <label for="centralistaAdminName">Nombre del centralista</label>
+            <input id="centralistaAdminName" maxlength="100" autocomplete="off" required>
+          </div>
+          <button id="centralistaAdminSave" class="save" type="submit">AGREGAR CENTRALISTA</button>
+          <button id="centralistaAdminCancel" class="cancel hidden" type="button">CANCELAR EDICIÓN</button>
+        </form>
+        <div class="table-container centralista-admin-table">
+          <table>
+            <thead><tr><th>NOMBRE</th><th>TURNO</th><th>ACCIONES</th></tr></thead>
+            <tbody id="centralistaAdminBody"></tbody>
           </table>
         </div>
       </section>
