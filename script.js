@@ -350,7 +350,7 @@ function renderCompanyManagement() {
     row.innerHTML = '<td>' + esc(company.codigo) + '</td><td>' + esc(company.nombre) +
       '</td><td>' + esc(vehicleGroupNames[group] || group) + '</td><td><div class="company-admin-actions">' +
       '<button type="button" class="company-edit" data-company-edit="' + esc(company.id) + '">EDITAR</button>' +
-      '<button type="button" class="company-retire" data-company-retire="' + esc(company.id) + '">RETIRAR</button>' +
+      '<button type="button" class="company-retire" data-company-delete="' + esc(company.id) + '">ELIMINAR</button>' +
       '</div></td>';
     body.append(row);
   });
@@ -1187,20 +1187,20 @@ byId("companyAdminBody").addEventListener("click", async event => {
     byId("companyAdminCode").focus();
     return;
   }
-  const retireButton = event.target.closest("[data-company-retire]");
-  if (!retireButton) return;
-  const company = companies.find(item => item.id === retireButton.dataset.companyRetire);
-  if (!company || !window.confirm("¿Retirar " + company.codigo + "? Dejará de aparecer activa. Sus vehículos e historial se conservarán archivados.")) return;
-  retireButton.disabled = true;
+  const deleteButton = event.target.closest("[data-company-delete]");
+  if (!deleteButton) return;
+  const company = companies.find(item => item.id === deleteButton.dataset.companyDelete);
+  if (!company || !window.confirm("¿ELIMINAR PERMANENTEMENTE " + company.codigo + "? Se borrarán sus vehículos, contadores, historial y auditoría. Esta acción no se puede deshacer y requiere que la compañía no tenga cuentas asignadas.")) return;
+  deleteButton.disabled = true;
   try {
-    const { error } = await db.rpc("admin_retirar_compania", { p_compania_id: company.id });
+    const { error } = await db.rpc("admin_eliminar_compania", { p_compania_id: company.id });
     if (error) throw error;
     resetCompanyAdminForm();
     await refresh();
-    message(company.codigo + " fue retirada. El historial se conservó.");
+    message(company.codigo + " y sus datos asociados fueron eliminados permanentemente.");
   } catch (error) {
-    message(error.message || "No se pudo retirar la compañía. Verifica si tiene usuarios activos asignados.", true);
-  } finally { retireButton.disabled = false; }
+    message(error.message || "No se pudo eliminar la compañía. Verifica si tiene cuentas asignadas.", true);
+  } finally { deleteButton.disabled = false; }
 });
 byId("centralistaSelect").addEventListener("change", async event => {
   if (!canSetCentralistaTurn()) {

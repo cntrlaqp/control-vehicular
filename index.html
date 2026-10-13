@@ -96,7 +96,7 @@
       </form>
       <section class="company-admin">
         <div class="panel-title">GESTIONAR COMPAÑÍAS</div>
-        <p class="user-management-help">Agrega, renombra, cambia de grupo o retira compañías. El retiro conserva el historial y requiere que no queden usuarios activos asignados.</p>
+        <p class="user-management-help">Agrega, renombra o cambia de grupo las compañías. Eliminar una compañía borra permanentemente sus vehículos, contadores, historial y auditoría; primero deben eliminarse o reasignarse sus cuentas.</p>
         <form id="companyAdminForm" class="user-form company-admin-form">
           <input id="companyAdminId" type="hidden">
           <div class="user-form-field"><label for="companyAdminCode">Código de compañía</label><input id="companyAdminCode" maxlength="40" required></div>
@@ -343,7 +343,8 @@
   </form>
 </div>
 
-<script src="script.js?v=20261013-no-reportado-ubo"></script>
+<script src="script.js?v=20261013-company-permanent-delete"></script>
 </body>
 </html>
+
 
